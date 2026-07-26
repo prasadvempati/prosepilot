@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
+import { clerkPlugin } from "@clerk/fastify";
 import { checkRoutes } from "./routes/check.js";
 import { healthRoutes } from "./routes/health.js";
 import { usageRoutes } from "./routes/usage.js";
@@ -31,6 +32,16 @@ await app.register(rateLimit, {
   max: 100,
   timeWindow: "1 minute",
 });
+
+// Clerk auth — only in production
+if (process.env.CLERK_SECRET_KEY) {
+  await app.register(clerkPlugin, {
+    secretKey: process.env.CLERK_SECRET_KEY,
+  });
+  console.log("Clerk auth enabled");
+} else {
+  console.log("Clerk auth disabled (no CLERK_SECRET_KEY)");
+}
 
 // --- API Routes ---
 

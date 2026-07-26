@@ -1,3 +1,5 @@
+import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
+
 export function Header() {
   return (
     <header className="bg-white border-b border-gray-200">
@@ -16,14 +18,30 @@ export function Header() {
           {/* Nav */}
           <nav className="hidden md:flex items-center gap-6">
             <a href="#" className="text-sm text-gray-600 hover:text-gray-900">Features</a>
-            <a href="#" className="text-sm text-gray-600 hover:text-gray-900">Pricing</a>
+            <a href="#pricing" className="text-sm text-gray-600 hover:text-gray-900">Pricing</a>
             <a href="#" className="text-sm text-gray-600 hover:text-gray-900">Docs</a>
           </nav>
 
           {/* Auth */}
           <div className="flex items-center gap-3">
-            <button className="btn-ghost text-sm">Sign In</button>
-            <button className="btn-primary text-sm">Get Started Free</button>
+            <SignedOut>
+              <SignInButton mode="modal">
+                <button className="btn-ghost text-sm">Sign In</button>
+              </SignInButton>
+              <SignInButton mode="modal">
+                <button className="btn-primary text-sm">Get Started Free</button>
+              </SignInButton>
+            </SignedOut>
+            <SignedIn>
+              <UserButton
+                afterSignOutUrl="/"
+                appearance={{
+                  elements: {
+                    avatarBox: "w-8 h-8",
+                  },
+                }}
+              />
+            </SignedIn>
           </div>
         </div>
       </div>
