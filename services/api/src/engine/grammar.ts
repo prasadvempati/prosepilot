@@ -223,6 +223,13 @@ CRITICAL RULES:
 3. Do NOT modify or "clean up" the original text — copy exactly as it appears
 4. If you're unsure about exact text, skip the issue
 
+SPECIFIC PATTERNS TO CHECK:
+- Compound words: "fireplace" (not "fire place"), "wide-spread" → "widespread", "no longer operable" → "inoperable"
+- Spelling: "leasing" used as adjective → "leased" (past participle)
+- Punctuation: semicolons before independent clauses ("LLC; the service")
+- Conciseness: "I would like to recommend to have" → "I want to recommend having"
+- Verbosity: "We would like to request" → "We want to request"; "no longer operable" → "inoperable"
+
 Only return issues you are confident about. Return an empty array if the text is clean.
 
 Text to check:
