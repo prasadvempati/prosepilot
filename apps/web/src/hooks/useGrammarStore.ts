@@ -10,7 +10,7 @@ interface GrammarStore {
   isChecking: boolean;
   hasChecked: boolean;
   checkError: string | null;
-  checkGrammar: () => Promise<void>;
+  checkGrammar: (overrideText?: string) => Promise<void>;
 
   // Rewrite
   tone: string;
@@ -20,10 +20,10 @@ interface GrammarStore {
   rewriteError: string | null;
   rewriteText: () => Promise<void>;
 
-  // Apply/dismiss
-  applyIssue: (issueId: string) => void;
+  // Apply/dismiss — all re-run grammar check after applying
+  applyIssue: (issueId: string) => Promise<void>;
   dismissIssue: (issueId: string) => void;
-  applyAll: () => void;
+  applyAll: () => Promise<void>;
   undo: () => void;
   history: string[];
 }
@@ -44,9 +44,9 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
 
   history: [],
 
-  checkGrammar: async () => {
-    const { text } = get();
-    if (!text.trim()) return;
+  checkGrammar: async (overrideText?: string) => {
+    const textToCheck = overrideText ?? get().text;
+    if (!textToCheck.trim()) return;
 
     set({ isChecking: true, issues: [], checkError: null, hasChecked: false });
 
@@ -54,7 +54,7 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
       const response = await fetch(`${API_BASE}/v1/check`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, mode: "review" }),
+        body: JSON.stringify({ text: textToCheck, mode: "review" }),
       });
 
       if (!response.ok) {
@@ -103,7 +103,7 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
     }
   },
 
-  applyIssue: (issueId) => {
+  applyIssue: async (issueId) => {
     const { text, issues, history } = get();
     const issue = issues.find((i) => i.id === issueId);
     if (!issue) return;
@@ -111,9 +111,12 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
     const newText = text.slice(0, issue.startUtf16) + issue.replacement + text.slice(issue.endUtf16);
     set({
       text: newText,
-      issues: issues.filter((i) => i.id !== issueId),
+      issues: [],
       history: [...history, text],
     });
+
+    // Re-run grammar check on updated text to get fresh offsets
+    await get().checkGrammar(newText);
   },
 
   dismissIssue: (issueId) => {
@@ -122,23 +125,25 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
     }));
   },
 
-  applyAll: () => {
+  applyAll: async () => {
     const { text, issues, history } = get();
     let newText = text;
 
     // Apply from end to start to preserve offsets
-    const sorted = [...issues].sort((a, b) => b.startUtf16 - a.startUtf16);
+    const safeIssues = issues.filter((i) => i.safeAuto);
+    const sorted = [...safeIssues].sort((a, b) => b.startUtf16 - a.startUtf16);
     for (const issue of sorted) {
-      if (issue.safeAuto) {
-        newText = newText.slice(0, issue.startUtf16) + issue.replacement + newText.slice(issue.endUtf16);
-      }
+      newText = newText.slice(0, issue.startUtf16) + issue.replacement + newText.slice(issue.endUtf16);
     }
 
     set({
       text: newText,
-      issues: issues.filter((i) => !i.safeAuto),
+      issues: [],
       history: [...history, text],
     });
+
+    // Re-run grammar check on updated text
+    await get().checkGrammar(newText);
   },
 
   undo: () => {
