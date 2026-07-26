@@ -1,0 +1,23 @@
+{
+  "name": "prosepilot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "clean": "turbo clean",
+    "db:generate": "cd services/api && pnpm run db:generate",
+    "db:migrate": "cd services/api && pnpm run db:migrate",
+    "db:push": "cd services/api && pnpm run db:push"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.29.1"
+}

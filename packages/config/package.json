@@ -1,0 +1,15 @@
+{
+  "name": "@prosepilot/config",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    "./typescript": "./typescript.json",
+    "./eslint": "./eslint.config.js"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.4.0"
+  }
+}
