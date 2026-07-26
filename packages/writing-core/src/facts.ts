@@ -1,4 +1,4 @@
-import type { ProtectedFact } from "./types";
+import type { ProtectedFact } from "./types.js";
 
 // Regex patterns for protected fact extraction
 const PATTERNS: Array<{ type: ProtectedFact["type"]; regex: RegExp }> = [
