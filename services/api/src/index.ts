@@ -6,6 +6,7 @@ import { clerkPlugin } from "@clerk/fastify";
 import { checkRoutes } from "./routes/check.js";
 import { healthRoutes } from "./routes/health.js";
 import { usageRoutes } from "./routes/usage.js";
+import { billingRoutes } from "./routes/billing.js";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync } from "fs";
@@ -48,6 +49,7 @@ if (process.env.CLERK_SECRET_KEY) {
 await app.register(healthRoutes);
 await app.register(checkRoutes);
 await app.register(usageRoutes);
+await app.register(billingRoutes);
 
 // --- Serve Frontend & SPA Fallback ---
 

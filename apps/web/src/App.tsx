@@ -4,6 +4,7 @@ import { Editor } from "./components/Editor";
 import { SuggestionPanel } from "./components/SuggestionPanel";
 import { RewritePanel } from "./components/RewritePanel";
 import { Header } from "./components/Header";
+import { Pricing } from "./components/Pricing";
 import { useGrammarStore } from "./hooks/useGrammarStore";
 
 type Tab = "check" | "rewrite";
@@ -44,6 +45,8 @@ export default function App() {
               </p>
             </div>
           </div>
+
+          <Pricing />
         </SignedOut>
 
         <SignedIn>
