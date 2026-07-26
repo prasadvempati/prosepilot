@@ -108,9 +108,73 @@ async function callDeepSeek(messages: Array<{ role: string; content: string }>, 
 
 // --- Grammar Check Engine ---
 
+// Tier 0: Rule-based fixes (instant, free, no API call)
+function detectRuleBasedIssues(text: string): GrammarIssue[] {
+  const issues: GrammarIssue[] = [];
+  const sourceHash = computeHashSync(text);
+
+  const rules: Array<{ pattern: RegExp; replacement: string; category: GrammarIssue["category"]; rule: string; explanation: string }> = [
+    // Space before comma/period/semicolon/colon
+    { pattern: /(\w) ,/g, replacement: "$1,", category: "punctuation", rule: "space_before_comma", explanation: "Remove space before comma." },
+    { pattern: /(\w) \./g, replacement: "$1.", category: "punctuation", rule: "space_before_period", explanation: "Remove space before period." },
+    { pattern: /(\w) ;/g, replacement: "$1;", category: "punctuation", rule: "space_before_semicolon", explanation: "Remove space before semicolon." },
+    { pattern: /(\w) :/g, replacement: "$1:", category: "punctuation", rule: "space_before_colon", explanation: "Remove space before colon." },
+    // Space before closing quote/bracket
+    { pattern: /(\w) \)/g, replacement: "$1)", category: "punctuation", rule: "space_before_paren", explanation: "Remove space before closing parenthesis." },
+    // Double spaces
+    { pattern: /  +/g, replacement: " ", category: "style", rule: "double_space", explanation: "Remove extra spaces." },
+    // Sentence starts with lowercase after period
+    { pattern: /([.!?]\s+)([a-z])/g, replacement: "$1$2", category: "punctuation", rule: "lowercase_after_period", explanation: "Sentence should start with a capital letter." },
+  ];
+
+  for (const rule of rules) {
+    let match;
+    rule.pattern.lastIndex = 0;
+    while ((match = rule.pattern.exec(text)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+      const fixed = match[0].replace(rule.pattern, rule.replacement);
+
+      // Only add if the fix actually changes something
+      if (fixed !== match[0]) {
+        issues.push({
+          id: `rule_${randomUUID().slice(0, 8)}`,
+          category: rule.category,
+          rule: rule.rule,
+          startUtf16: start,
+          endUtf16: end,
+          original: match[0],
+          replacement: fixed,
+          confidence: 0.99,
+          safeAuto: true,
+          severity: "info",
+          explanation: rule.explanation,
+          sourceHash,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
+function computeHashSync(text: string): string {
+  // Quick synchronous hash for rule-based issues
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    const char = text.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return `sha256:${Math.abs(hash).toString(16).padStart(8, "0")}`;
+}
+
 export async function checkGrammar(request: CheckRequest): Promise<CheckResponse> {
   const startTime = Date.now();
   const { text, mode } = request;
+
+  // Tier 0: Rule-based (instant, free)
+  const ruleIssues = detectRuleBasedIssues(text);
 
   // Tier 1: LanguageTool (free, self-hosted)
   const ltIssues = await callLanguageTool(text);
@@ -121,8 +185,8 @@ export async function checkGrammar(request: CheckRequest): Promise<CheckResponse
     aiIssues = await callDeepSeekForIssues(text);
   }
 
-  // Merge and deduplicate
-  const allIssues = mergeIssues(ltIssues, aiIssues);
+  // Merge: rule-based + LT + AI, deduplicate by offset proximity
+  const allIssues = mergeAllIssues(ruleIssues, ltIssues, aiIssues);
 
   const latencyMs = Date.now() - startTime;
   const sourceHash = await computeHash(text);
@@ -135,7 +199,7 @@ export async function checkGrammar(request: CheckRequest): Promise<CheckResponse
       issueCount: allIssues.length,
       checkMode: mode,
       latencyMs,
-      engineTier: aiIssues.length > 0 ? "deepseek" : "lt",
+      engineTier: aiIssues.length > 0 ? "deepseek" : ltIssues.length > 0 ? "lt" : "rule",
     },
   };
 }
@@ -241,15 +305,26 @@ Return ONLY the JSON array, no other text.`;
   }
 }
 
-function mergeIssues(ltIssues: GrammarIssue[], aiIssues: GrammarIssue[]): GrammarIssue[] {
-  const merged = [...ltIssues];
-  const ltPositions = new Set(ltIssues.map((i) => `${i.startUtf16}-${i.endUtf16}`));
+function mergeAllIssues(ruleIssues: GrammarIssue[], ltIssues: GrammarIssue[], aiIssues: GrammarIssue[]): GrammarIssue[] {
+  // Start with rule-based issues (highest priority — always correct)
+  const merged = [...ruleIssues];
+  const usedPositions = new Set(ruleIssues.map((i) => `${i.startUtf16}-${i.endUtf16}`));
 
-  // Add AI issues that don't overlap with LT issues
+  // Add LT issues that don't overlap with rule-based
+  for (const ltIssue of ltIssues) {
+    const key = `${ltIssue.startUtf16}-${ltIssue.endUtf16}`;
+    if (!usedPositions.has(key)) {
+      merged.push(ltIssue);
+      usedPositions.add(key);
+    }
+  }
+
+  // Add AI issues that don't overlap with any existing issue
   for (const aiIssue of aiIssues) {
     const key = `${aiIssue.startUtf16}-${aiIssue.endUtf16}`;
-    if (!ltPositions.has(key)) {
+    if (!usedPositions.has(key)) {
       merged.push(aiIssue);
+      usedPositions.add(key);
     }
   }
 
