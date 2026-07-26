@@ -117,7 +117,7 @@ export interface UsageMetadata {
   issueCount: number;
   checkMode: CheckMode;
   latencyMs: number;
-  engineTier: "lt" | "deepseek-flash" | "deepseek-pro";
+  engineTier: "lt" | "deepseek-flash" | "deepseek-pro" | "deepseek";
 }
 
 export interface User {

@@ -82,7 +82,7 @@ function isSafeAuto(category: GrammarIssue["category"], confidence: number, repl
 
 // --- DeepSeek Integration ---
 
-async function callDeepSeek(messages: Array<{ role: string; content: string }>, model = "deepseek-v4-flash"): Promise<string> {
+async function callDeepSeek(messages: Array<{ role: string; content: string }>, model = "deepseek-chat"): Promise<string> {
   const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -135,7 +135,7 @@ export async function checkGrammar(request: CheckRequest): Promise<CheckResponse
       issueCount: allIssues.length,
       checkMode: mode,
       latencyMs,
-      engineTier: aiIssues.length > 0 ? "deepseek-flash" : "lt",
+      engineTier: aiIssues.length > 0 ? "deepseek" : "lt",
     },
   };
 }
@@ -257,11 +257,10 @@ ${text}
 
 Return ONLY the rewritten text, no explanations or quotes.`;
 
-  const model = facts.length > 3 ? "deepseek-v4-pro" : "deepseek-v4-flash";
   const rewritten = await callDeepSeek([
     { role: "system", content: "You are a professional text rewriter. Return only the rewritten text, no explanations." },
     { role: "user", content: prompt },
-  ], model);
+  ]);
 
   // Clean up the rewritten text (remove quotes if wrapped)
   const cleaned = rewritten.replace(/^["']|["']$/g, "").trim();
@@ -285,7 +284,7 @@ Return ONLY the rewritten text, no explanations or quotes.`;
       issueCount: 0,
       checkMode: "rewrite",
       latencyMs,
-      engineTier: model === "deepseek-v4-pro" ? "deepseek-pro" : "deepseek-flash",
+      engineTier: "deepseek",
     },
   };
 }
