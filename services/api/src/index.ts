@@ -59,12 +59,16 @@ if (existsSync(webDistPath)) {
     root: webDistPath,
     prefix: "/",
     decorateReply: true,
+    maxAge: 0,
+    etag: false,
+    lastModified: false,
   });
 
   app.setNotFoundHandler((req, reply) => {
     if (req.url.startsWith("/v1/") || req.url.startsWith("/health")) {
       return reply.code(404).send({ error: "Not found" });
     }
+    reply.header("Cache-Control", "no-cache, no-store, must-revalidate");
     return reply.sendFile("index.html");
   });
 }
