@@ -1,8 +1,9 @@
 [build]
 builder = "railpack"
+buildCommand = "pnpm install && turbo build"
 
 [deploy]
-startCommand = "pnpm install && turbo build && node services/api/dist/index.js"
+startCommand = "node services/api/dist/index.js"
 healthcheckPath = "/health/live"
 healthcheckTimeout = 10
 restartPolicyType = "on_failure"
