@@ -10,7 +10,7 @@ interface GrammarStore {
   isChecking: boolean;
   hasChecked: boolean;
   checkError: string | null;
-  checkGrammar: (overrideText?: string) => Promise<void>;
+  checkGrammar: () => Promise<void>;
 
   // Rewrite
   tone: string;
@@ -20,12 +20,46 @@ interface GrammarStore {
   rewriteError: string | null;
   rewriteText: () => Promise<void>;
 
-  // Apply/dismiss — all re-run grammar check after applying
-  applyIssue: (issueId: string) => Promise<void>;
+  // Apply/dismiss — client-side offset recalculation, no API call
+  applyIssue: (issueId: string) => void;
   dismissIssue: (issueId: string) => void;
-  applyAll: () => Promise<void>;
+  applyAll: () => void;
   undo: () => void;
   history: string[];
+}
+
+/**
+ * After applying a fix, recalculate offsets for all remaining issues.
+ * Issues that don't overlap with the fix stay valid.
+ * Issues after the fix shift by the delta (replacement length - original length).
+ */
+function recalculateOffsets(
+  issues: GrammarIssue[],
+  appliedIssue: GrammarIssue,
+  replacement: string
+): GrammarIssue[] {
+  const delta = replacement.length - (appliedIssue.endUtf16 - appliedIssue.startUtf16);
+  const fixEnd = appliedIssue.endUtf16;
+
+  return issues
+    .filter((i) => i.id !== appliedIssue.id)
+    .map((issue) => {
+      // Skip issues that start after the fix — shift them
+      if (issue.startUtf16 >= fixEnd) {
+        return {
+          ...issue,
+          startUtf16: issue.startUtf16 + delta,
+          endUtf16: issue.endUtf16 + delta,
+        };
+      }
+      // Skip issues that end before the fix — no change
+      if (issue.endUtf16 <= appliedIssue.startUtf16) {
+        return issue;
+      }
+      // Overlapping issue — remove it (offsets are unreliable)
+      return null;
+    })
+    .filter((i): i is GrammarIssue => i !== null);
 }
 
 export const useGrammarStore = create<GrammarStore>((set, get) => ({
@@ -44,9 +78,9 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
 
   history: [],
 
-  checkGrammar: async (overrideText?: string) => {
-    const textToCheck = overrideText ?? get().text;
-    if (!textToCheck.trim()) return;
+  checkGrammar: async () => {
+    const { text } = get();
+    if (!text.trim()) return;
 
     set({ isChecking: true, issues: [], checkError: null, hasChecked: false });
 
@@ -54,7 +88,7 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
       const response = await fetch(`${API_BASE}/v1/check`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: textToCheck, mode: "review" }),
+        body: JSON.stringify({ text, mode: "review" }),
       });
 
       if (!response.ok) {
@@ -103,20 +137,19 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
     }
   },
 
-  applyIssue: async (issueId) => {
+  applyIssue: (issueId) => {
     const { text, issues, history } = get();
     const issue = issues.find((i) => i.id === issueId);
     if (!issue) return;
 
     const newText = text.slice(0, issue.startUtf16) + issue.replacement + text.slice(issue.endUtf16);
+    const updatedIssues = recalculateOffsets(issues, issue, issue.replacement);
+
     set({
       text: newText,
-      issues: [],
+      issues: updatedIssues,
       history: [...history, text],
     });
-
-    // Re-run grammar check on updated text to get fresh offsets
-    await get().checkGrammar(newText);
   },
 
   dismissIssue: (issueId) => {
@@ -125,25 +158,25 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
     }));
   },
 
-  applyAll: async () => {
+  applyAll: () => {
     const { text, issues, history } = get();
     let newText = text;
+    let currentIssues = [...issues];
 
     // Apply from end to start to preserve offsets
-    const safeIssues = issues.filter((i) => i.safeAuto);
-    const sorted = [...safeIssues].sort((a, b) => b.startUtf16 - a.startUtf16);
+    const sorted = [...currentIssues].sort((a, b) => b.startUtf16 - a.startUtf16);
     for (const issue of sorted) {
-      newText = newText.slice(0, issue.startUtf16) + issue.replacement + newText.slice(issue.endUtf16);
+      if (issue.safeAuto) {
+        newText = newText.slice(0, issue.startUtf16) + issue.replacement + newText.slice(issue.endUtf16);
+        currentIssues = currentIssues.filter((i) => i.id !== issue.id);
+      }
     }
 
     set({
       text: newText,
-      issues: [],
+      issues: currentIssues,
       history: [...history, text],
     });
-
-    // Re-run grammar check on updated text
-    await get().checkGrammar(newText);
   },
 
   undo: () => {
