@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { GrammarIssue, RewriteResult } from "@prosepilot/writing-core";
 
-const API_BASE = "/api";
+const API_BASE = "";
 
 interface GrammarStore {
   text: string;

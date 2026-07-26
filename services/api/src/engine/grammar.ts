@@ -115,9 +115,9 @@ export async function checkGrammar(request: CheckRequest): Promise<CheckResponse
   // Tier 1: LanguageTool (free, self-hosted)
   const ltIssues = await callLanguageTool(text);
 
-  // Tier 2: DeepSeek for clarity/tone (only for rewrite mode or if LT found issues)
+  // Tier 2: DeepSeek for clarity/tone (always run in review mode)
   let aiIssues: GrammarIssue[] = [];
-  if (mode === "rewrite" || mode === "report" || ltIssues.length > 0) {
+  if (mode === "rewrite" || mode === "report" || mode === "review" || ltIssues.length > 0) {
     aiIssues = await callDeepSeekForIssues(text);
   }
 
