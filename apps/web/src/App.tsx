@@ -9,7 +9,7 @@ type Tab = "check" | "rewrite";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("check");
-  const { issues, isChecking, text, setText, checkGrammar, rewriteText, rewriteResult, isRewriting } = useGrammarStore();
+  const { issues, isChecking, hasChecked, checkError, text, setText, checkGrammar, rewriteText, rewriteResult, isRewriting } = useGrammarStore();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -61,6 +61,8 @@ export default function App() {
                 issues={issues}
                 originalText={text}
                 isChecking={isChecking}
+                hasChecked={hasChecked}
+                error={checkError}
               />
             ) : (
               <RewritePanel

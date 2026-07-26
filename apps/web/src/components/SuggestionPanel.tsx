@@ -6,6 +6,8 @@ interface SuggestionPanelProps {
   issues: GrammarIssue[];
   originalText: string;
   isChecking: boolean;
+  hasChecked: boolean;
+  error: string | null;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -32,7 +34,7 @@ const SEVERITY_COLORS: Record<string, string> = {
   suggestion: "text-gray-500 bg-gray-50",
 };
 
-export function SuggestionPanel({ issues, originalText, isChecking }: SuggestionPanelProps) {
+export function SuggestionPanel({ issues, originalText, isChecking, hasChecked, error }: SuggestionPanelProps) {
   const { applyIssue, dismissIssue, applyAll, undo, history } = useGrammarStore();
 
   if (isChecking) {
@@ -44,14 +46,15 @@ export function SuggestionPanel({ issues, originalText, isChecking }: Suggestion
     );
   }
 
-  if (issues.length === 0 && originalText.trim()) {
+  if (error) {
     return (
       <div className="card p-8 flex flex-col items-center justify-center text-center">
-        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-          <Check className="w-6 h-6 text-green-600" />
+        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
+          <AlertCircle className="w-6 h-6 text-red-600" />
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-1">All clear!</h3>
-        <p className="text-sm text-gray-500">No issues found in your text.</p>
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">Something went wrong</h3>
+        <p className="text-sm text-red-600 mb-2">{error}</p>
+        <p className="text-xs text-gray-400">Check the browser console for details.</p>
       </div>
     );
   }
@@ -60,6 +63,26 @@ export function SuggestionPanel({ issues, originalText, isChecking }: Suggestion
     return (
       <div className="card p-8 flex flex-col items-center justify-center text-center">
         <p className="text-sm text-gray-500">Paste or type text to get started.</p>
+      </div>
+    );
+  }
+
+  if (!hasChecked) {
+    return (
+      <div className="card p-8 flex flex-col items-center justify-center text-center">
+        <p className="text-sm text-gray-500">Click <strong>Check Grammar</strong> to analyze your text.</p>
+      </div>
+    );
+  }
+
+  if (hasChecked && issues.length === 0) {
+    return (
+      <div className="card p-8 flex flex-col items-center justify-center text-center">
+        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
+          <Check className="w-6 h-6 text-green-600" />
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">All clear!</h3>
+        <p className="text-sm text-gray-500">No issues found in your text.</p>
       </div>
     );
   }
@@ -120,7 +143,7 @@ export function SuggestionPanel({ issues, originalText, isChecking }: Suggestion
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-gray-400">Change:</span>
                     <span className="line-through text-gray-500">{issue.original}</span>
-                    <span className="text-gray-400">→</span>
+                    <span className="text-gray-400">&rarr;</span>
                     <span className="text-green-600 font-medium">{issue.replacement}</span>
                   </div>
                 </div>
