@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 320px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .header { background: #6366f1; color: white; padding: 16px; display: flex; align-items: center; gap: 8px; }
+    .header svg { width: 20px; height: 20px; }
+    .header h1 { font-size: 16px; font-weight: 600; }
+    .content { padding: 16px; }
+    .status { padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+    .status.ready { background: #ecfdf5; color: #065f46; }
+    .status.error { background: #fef2f2; color: #991b1b; }
+    .btn { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+    .btn-primary { background: #6366f1; color: white; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-secondary { background: #f3f4f6; color: #374151; margin-top: 8px; }
+    .btn-secondary:hover { background: #e5e7eb; }
+    .issues { margin-top: 12px; }
+    .issue { padding: 8px; background: #f9fafb; border-radius: 6px; margin-bottom: 6px; font-size: 12px; }
+    .issue .category { color: #6366f1; font-weight: 500; }
+    .issue .original { color: #dc2626; text-decoration: line-through; }
+    .issue .replacement { color: #059669; }
+    .footer { padding: 12px 16px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; text-align: center; }
+    .footer a { color: #6366f1; text-decoration: none; }
+    #loading { display: none; text-align: center; padding: 20px; color: #6b7280; }
+    #results { display: none; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+    <h1>ProsePilot</h1>
+  </div>
+  
+  <div class="content">
+    <div id="status" class="status ready">Ready to check</div>
+    
+    <button id="checkBtn" class="btn btn-primary">Check Selection</button>
+    <button id="settingsBtn" class="btn btn-secondary">Settings</button>
+    
+    <div id="loading">Checking grammar...</div>
+    <div id="results" class="issues"></div>
+  </div>
+  
+  <div class="footer">
+    <a href="https://prosepilot.io" target="_blank">ProsePilot</a> — Your Writing Co-Pilot
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

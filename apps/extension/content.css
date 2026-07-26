@@ -1,0 +1,7 @@
+#prosepilot-btn {
+  transition: transform 0.1s;
+}
+
+#prosepilot-btn:hover {
+  transform: scale(1.1);
+}
