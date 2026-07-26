@@ -1,0 +1,9 @@
+[build]
+builder = "railpack"
+
+[deploy]
+startCommand = "pnpm install && turbo build --filter=@prosepilot/writing-core... && node services/api/dist/index.js"
+healthcheckPath = "/health/live"
+healthcheckTimeout = 10
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5
