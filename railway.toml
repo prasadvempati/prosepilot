@@ -1,6 +1,6 @@
 [build]
 builder = "railpack"
-buildCommand = "pnpm install && turbo build"
+buildCommand = "pnpm install && pnpm turbo build"
 
 [deploy]
 startCommand = "node services/api/dist/index.js"
