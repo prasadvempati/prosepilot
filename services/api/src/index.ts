@@ -1,9 +1,16 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
+import fastifyStatic from "@fastify/static";
 import { checkRoutes } from "./routes/check.js";
 import { healthRoutes } from "./routes/health.js";
 import { usageRoutes } from "./routes/usage.js";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import { existsSync } from "fs";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = Fastify({
   logger: {
@@ -25,19 +32,29 @@ await app.register(rateLimit, {
   timeWindow: "1 minute",
 });
 
-// --- Routes ---
+// --- API Routes ---
 
 await app.register(healthRoutes);
 await app.register(checkRoutes);
 await app.register(usageRoutes);
 
-// --- Root ---
+// --- Serve Frontend & SPA Fallback ---
 
-app.get("/", async () => ({
-  name: "ProsePilot API",
-  version: "0.1.0",
-  docs: "/docs",
-}));
+const webDistPath = join(__dirname, "../../../apps/web/dist");
+if (existsSync(webDistPath)) {
+  await app.register(fastifyStatic, {
+    root: webDistPath,
+    prefix: "/",
+    decorateReply: true,
+  });
+
+  app.setNotFoundHandler((req, reply) => {
+    if (req.url.startsWith("/v1/") || req.url.startsWith("/health")) {
+      return reply.code(404).send({ error: "Not found" });
+    }
+    return reply.sendFile("index.html");
+  });
+}
 
 // --- Start ---
 
