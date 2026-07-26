@@ -3,7 +3,7 @@ builder = "railpack"
 buildCommand = "pnpm install && pnpm turbo build"
 
 [deploy]
-startCommand = "node services/api/dist/index.js"
+startCommand = "pnpm install --frozen-lockfile && node services/api/dist/index.js"
 healthcheckPath = "/health/live"
 healthcheckTimeout = 10
 restartPolicyType = "on_failure"
