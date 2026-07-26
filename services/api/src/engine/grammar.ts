@@ -147,13 +147,17 @@ async function callDeepSeekForIssues(text: string): Promise<GrammarIssue[]> {
 Return a JSON array of issues. Each issue must have:
 - "category": one of "grammar", "spelling", "punctuation", "clarity", "style", "tone", "conciseness"
 - "rule": a short rule identifier (e.g. "passive_voice", "wordiness", "unclear_antecedent")
-- "startUtf16": the character offset where the issue starts (0-indexed)
-- "endUtf16": the character offset where the issue ends
-- "original": the problematic text
+- "original": the EXACT problematic text copied character-for-character from the input
 - "replacement": the suggested fix
 - "confidence": 0.0 to 1.0
 - "severity": "error", "warning", "info", or "suggestion"
 - "explanation": a clear explanation of the issue
+
+CRITICAL RULES:
+1. The "original" field MUST be an exact substring of the input text — copy it character-for-character
+2. Do NOT include text from multiple sentences in one issue — keep each issue to a single phrase or clause
+3. Do NOT modify or "clean up" the original text — copy exactly as it appears
+4. If you're unsure about exact text, skip the issue
 
 Only return issues you are confident about. Return an empty array if the text is clean.
 
@@ -174,20 +178,63 @@ Return ONLY the JSON array, no other text.`;
 
     if (!Array.isArray(parsed)) return [];
 
-    return parsed.map((item: any) => ({
-      id: `ds_${randomUUID().slice(0, 8)}`,
-      category: item.category || "grammar",
-      rule: item.rule || "ai_suggestion",
-      startUtf16: item.startUtf16 || 0,
-      endUtf16: item.endUtf16 || 0,
-      original: item.original || "",
-      replacement: item.replacement || "",
-      confidence: item.confidence || 0.8,
-      safeAuto: false, // AI suggestions always require review
-      severity: item.severity || "suggestion",
-      explanation: item.explanation || "",
-      sourceHash,
-    }));
+    // Validate and fix offsets — DeepSeek often returns wrong offsets
+    const validated: GrammarIssue[] = [];
+    for (const item of parsed) {
+      const original = item.original || "";
+      const replacement = item.replacement || "";
+      if (!original || !replacement || original === replacement) continue;
+
+      let start = item.startUtf16 || 0;
+      let end = item.endUtf16 || 0;
+
+      // Check if offset is valid: text.slice(start, end) should match original
+      const actualAtOffset = text.slice(start, end);
+      if (actualAtOffset === original) {
+        // Offset is correct
+        validated.push({
+          id: `ds_${randomUUID().slice(0, 8)}`,
+          category: item.category || "grammar",
+          rule: item.rule || "ai_suggestion",
+          startUtf16: start,
+          endUtf16: end,
+          original,
+          replacement,
+          confidence: item.confidence || 0.8,
+          safeAuto: false,
+          severity: item.severity || "suggestion",
+          explanation: item.explanation || "",
+          sourceHash,
+        });
+        continue;
+      }
+
+      // Offset is wrong — search for the original text in the document
+      const foundIndex = text.indexOf(original);
+      if (foundIndex === -1) {
+        // Original text not found at all — skip this issue
+        console.warn(`DeepSeek issue skipped: "${original}" not found in text`);
+        continue;
+      }
+
+      // Found it — use the correct offset
+      validated.push({
+        id: `ds_${randomUUID().slice(0, 8)}`,
+        category: item.category || "grammar",
+        rule: item.rule || "ai_suggestion",
+        startUtf16: foundIndex,
+        endUtf16: foundIndex + original.length,
+        original,
+        replacement,
+        confidence: item.confidence || 0.8,
+        safeAuto: false,
+        severity: item.severity || "suggestion",
+        explanation: item.explanation || "",
+        sourceHash,
+      });
+    }
+
+    return validated;
   } catch (error) {
     console.error("DeepSeek check error:", error);
     return [];
