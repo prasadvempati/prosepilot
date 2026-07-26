@@ -42,32 +42,17 @@ await app.register(usageRoutes);
 
 const webDistPath = join(__dirname, "../../../apps/web/dist");
 if (existsSync(webDistPath)) {
-  // Serve static assets (JS, CSS, images) with long cache
   await app.register(fastifyStatic, {
     root: webDistPath,
-    prefix: "/assets/",
+    prefix: "/",
     decorateReply: true,
-  });
-
-  // Serve index.html with no-cache to prevent stale bundles
-  app.get("/", async (_req, reply) => {
-    return reply
-      .header("Cache-Control", "no-cache, no-store, must-revalidate")
-      .header("Pragma", "no-cache")
-      .header("Expires", "0")
-      .sendFile("index.html");
   });
 
   app.setNotFoundHandler((req, reply) => {
     if (req.url.startsWith("/v1/") || req.url.startsWith("/health")) {
       return reply.code(404).send({ error: "Not found" });
     }
-    // SPA: serve index.html for all non-API, non-asset routes
-    return reply
-      .header("Cache-Control", "no-cache, no-store, must-revalidate")
-      .header("Pragma", "no-cache")
-      .header("Expires", "0")
-      .sendFile("index.html");
+    return reply.sendFile("index.html");
   });
 }
 
