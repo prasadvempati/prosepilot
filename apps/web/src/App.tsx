@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SignedIn, SignedOut, SignUpButton } from "@clerk/clerk-react";
+import { Show, SignInButton, SignUpButton } from "@clerk/react";
 import { Editor } from "./components/Editor";
 import { SuggestionPanel } from "./components/SuggestionPanel";
 import { RewritePanel } from "./components/RewritePanel";
@@ -17,147 +17,8 @@ export default function App() {
     <div className="min-h-screen bg-surface-50">
       <Header />
 
-      <SignedOut>
-        {/* Hero Section */}
-        <section className="relative overflow-hidden">
-          {/* Background gradient */}
-          <div className="absolute inset-0 bg-gradient-to-b from-brand-50/50 via-transparent to-transparent" />
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-brand-400/10 rounded-full blur-3xl" />
-          
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
-            <div className="text-center max-w-3xl mx-auto">
-              {/* Eyebrow */}
-              <div className="animate-in inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-50 border border-brand-100 mb-8">
-                <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
-                <span className="text-sm font-medium text-brand-700">Powered by AI, not rules</span>
-              </div>
-
-              {/* Headline */}
-              <h1 className="animate-in-delay-1 text-display-xl text-ink-900 mb-6">
-                Write with{" "}
-                <span className="gradient-text">confidence</span>
-              </h1>
-
-              {/* Subheadline */}
-              <p className="animate-in-delay-2 text-xl text-ink-500 mb-10 max-w-2xl mx-auto leading-relaxed">
-                Fix grammar, clarity, and tone instantly. ProsePilot understands context 
-                and suggests improvements that make your writing shine.
-              </p>
-
-              {/* CTA */}
-              <div className="animate-in-delay-3 flex flex-col sm:flex-row gap-4 justify-center">
-                <SignUpButton mode="modal">
-                  <button className="btn-primary text-base px-8 py-3.5 shadow-glow hover:shadow-glow-lg">
-                    Start writing better
-                  </button>
-                </SignUpButton>
-                <a href="#pricing" className="btn-secondary text-base px-8 py-3.5">
-                  See pricing
-                </a>
-              </div>
-
-              {/* Social proof */}
-              <div className="animate-in-delay-3 mt-12 flex items-center justify-center gap-8 text-sm text-ink-500">
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <span>Free to start</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <span>No credit card required</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-success" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <span>Works everywhere</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Features Section */}
-        <section id="features" className="py-20 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-display-lg text-ink-900 mb-4">Everything you need to write better</h2>
-              <p className="text-xl text-ink-500 max-w-2xl mx-auto">
-                Simple, powerful tools that help you communicate more effectively.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {[
-                {
-                  icon: (
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  ),
-                  title: "Grammar & Spelling",
-                  description: "Catch errors instantly with AI that understands context, not just rules.",
-                },
-                {
-                  icon: (
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  ),
-                  title: "Clarity & Tone",
-                  description: "Make your writing clearer and adjust tone for any audience.",
-                },
-                {
-                  icon: (
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  ),
-                  title: "AI Rewrite",
-                  description: "Rewrite entire paragraphs with a click. Professional, casual, or concise.",
-                },
-              ].map((feature, i) => (
-                <div
-                  key={i}
-                  className={`card p-8 animate-in-delay-${i + 1}`}
-                >
-                  <div className="w-12 h-12 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-5">
-                    {feature.icon}
-                  </div>
-                  <h3 className="text-lg font-semibold text-ink-900 mb-2">{feature.title}</h3>
-                  <p className="text-ink-500 leading-relaxed">{feature.description}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <Pricing />
-
-        {/* Footer */}
-        <footer className="py-12 bg-surface-50 border-t border-surface-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-brand-400 to-brand-600 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </div>
-                <span className="font-semibold text-ink-900">ProsePilot</span>
-              </div>
-              <p className="text-sm text-ink-500">© 2024 ProsePilot. Write with confidence.</p>
-            </div>
-          </div>
-        </footer>
-      </SignedOut>
-
-      <SignedIn>
-        {/* Editor Interface */}
+      {/* Editor - visible when signed in */}
+      <Show when="signed-in">
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Tab Switcher */}
           <div className="flex items-center gap-1 p-1 bg-surface-100 rounded-xl w-fit mb-6">
@@ -227,7 +88,135 @@ export default function App() {
             </div>
           </div>
         </main>
-      </SignedIn>
+      </Show>
+
+      {/* Landing page - visible when signed out */}
+      <Show when="signed-out">
+        <div className="relative overflow-hidden">
+          {/* Hero */}
+          <section className="relative pt-24 pb-32 px-4 sm:px-6 lg:px-8">
+            <div className="absolute inset-0 bg-gradient-to-br from-brand-50 via-surface-50 to-purple-50" />
+            <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-brand-100 rounded-full blur-3xl opacity-30 -translate-y-1/2 translate-x-1/3" />
+            <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-purple-100 rounded-full blur-3xl opacity-30 translate-y-1/2 -translate-x-1/3" />
+            
+            <div className="relative max-w-5xl mx-auto text-center">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-50 border border-brand-100 text-sm font-medium text-brand-700 mb-8 animate-fadeIn">
+                <span className="w-2 h-2 bg-brand-500 rounded-full animate-pulse" />
+                Your Writing Co-Pilot
+              </div>
+              
+              <h1 className="text-display-xl text-ink-900 mb-6 animate-slideUp">
+                Write with{" "}
+                <span className="bg-gradient-to-r from-brand-500 to-purple-500 bg-clip-text text-transparent">
+                  confidence
+                </span>
+              </h1>
+              
+              <p className="text-xl text-ink-500 max-w-2xl mx-auto mb-10 animate-slideUp" style={{ animationDelay: "100ms" }}>
+                Fix grammar, improve clarity, and match your tone — all in one place. 
+                The writing assistant that works where you do.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slideUp" style={{ animationDelay: "200ms" }}>
+                <SignUpButton mode="modal">
+                  <button className="btn-primary text-base px-8 py-3.5 shadow-glow">
+                    Start writing free
+                    <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  </button>
+                </SignUpButton>
+                <SignInButton mode="modal">
+                  <button className="btn-secondary text-base px-8 py-3.5">
+                    Sign in
+                  </button>
+                </SignInButton>
+              </div>
+              
+              <p className="mt-6 text-sm text-ink-400 animate-slideUp" style={{ animationDelay: "300ms" }}>
+                No credit card required · Free forever for basic use
+              </p>
+            </div>
+          </section>
+
+          {/* Features */}
+          <section id="features" className="py-24 bg-white">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="text-center mb-16">
+                <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface-100 border border-surface-200 text-sm font-medium text-ink-600 mb-6">
+                  Features
+                </span>
+                <h2 className="text-display-lg text-ink-900 mb-4">Everything you need to write better</h2>
+                <p className="text-xl text-ink-500 max-w-2xl mx-auto">
+                  Powerful grammar checking and rewriting tools, designed for professionals.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {[
+                  {
+                    icon: (
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    ),
+                    title: "Grammar & Spelling",
+                    description: "Catch errors instantly with AI-powered detection that understands context, not just rules."
+                  },
+                  {
+                    icon: (
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    ),
+                    title: "Smart Rewrite",
+                    description: "Adjust tone, clarity, and formality with one click. Professional, casual, or anywhere in between."
+                  },
+                  {
+                    icon: (
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    ),
+                    title: "Browser Extension",
+                    description: "Works everywhere you write — Gmail, Slack, Google Docs, LinkedIn, and more."
+                  }
+                ].map((feature, i) => (
+                  <div key={i} className="card p-8 text-center hover:shadow-elevated transition-shadow duration-300">
+                    <div className="w-12 h-12 bg-brand-50 rounded-xl flex items-center justify-center text-brand-600 mx-auto mb-5">
+                      {feature.icon}
+                    </div>
+                    <h3 className="text-lg font-semibold text-ink-900 mb-3">{feature.title}</h3>
+                    <p className="text-ink-500 leading-relaxed">{feature.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Pricing */}
+          <Pricing />
+
+          {/* Footer */}
+          <footer className="py-12 bg-surface-50 border-t border-surface-200">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-br from-brand-400 to-brand-600 rounded-lg flex items-center justify-center">
+                    <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </div>
+                  <span className="font-semibold text-ink-900">ProsePilot</span>
+                </div>
+                <p className="text-sm text-ink-400">
+                  © 2026 ProsePilot. Built for professionals who write.
+                </p>
+              </div>
+            </div>
+          </footer>
+        </div>
+      </Show>
     </div>
   );
 }

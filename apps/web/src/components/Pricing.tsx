@@ -1,21 +1,6 @@
-import { SignedIn, SignedOut, SignInButton, SignUpButton } from "@clerk/clerk-react";
-
 export function Pricing() {
-  const handleCheckout = async () => {
-    try {
-      const res = await fetch("/v1/billing/checkout", { method: "POST" });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (err) {
-      console.error("Checkout error:", err);
-    }
-  };
-
   return (
     <section id="pricing" className="py-24 bg-white relative overflow-hidden">
-      {/* Background decoration */}
       <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-brand-50 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/2" />
       
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -55,18 +40,9 @@ export function Pricing() {
                 </li>
               ))}
             </ul>
-            <SignedOut>
-              <SignUpButton mode="modal">
-                <button className="w-full btn-secondary py-3">
-                  Get started free
-                </button>
-              </SignUpButton>
-            </SignedOut>
-            <SignedIn>
-              <button className="w-full btn-secondary py-3" disabled>
-                Current plan
-              </button>
-            </SignedIn>
+            <button className="w-full btn-secondary py-3" disabled>
+              You're on this plan
+            </button>
           </div>
 
           {/* Pro Plan */}
@@ -101,25 +77,12 @@ export function Pricing() {
                 </li>
               ))}
             </ul>
-            <SignedIn>
-              <button
-                onClick={handleCheckout}
-                className="w-full btn-primary py-3"
-              >
-                Upgrade to Pro
-              </button>
-            </SignedIn>
-            <SignedOut>
-              <SignInButton mode="modal">
-                <button className="w-full btn-primary py-3">
-                  Sign in to upgrade
-                </button>
-              </SignInButton>
-            </SignedOut>
+            <button className="w-full btn-primary py-3" disabled>
+              Coming soon
+            </button>
           </div>
         </div>
 
-        {/* Team pricing */}
         <div className="mt-12 text-center">
           <div className="inline-flex items-center gap-4 px-6 py-4 rounded-2xl bg-surface-50 border border-surface-200">
             <div className="w-10 h-10 bg-brand-50 rounded-xl flex items-center justify-center">
