@@ -1,4 +1,3 @@
-# Build: 2026-07-27 - Clerk integration
 FROM node:20-slim
 
 RUN corepack enable && corepack prepare pnpm@10.29.1 --activate
@@ -15,11 +14,13 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-ARG VITE_CLERK_PUBLISHABLE_KEY
-ENV VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY:-pk_test_c3VwcmVtZS1ob3JzZS0yMC5jbGVyay5hY2NvdW50cy5kZXYk}
+ENV VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3VwcmVtZS1ob3JzZS0yMC5jbGVyay5hY2NvdW50cy5kZXYk
 
-RUN pnpm turbo build --force
+RUN pnpm turbo build
 
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD node -e "fetch('http://localhost:8080/health/live').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"
 
 CMD ["node", "services/api/dist/index.js"]
