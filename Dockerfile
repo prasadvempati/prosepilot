@@ -1,3 +1,4 @@
+# Build: 2026-07-27 - Clerk integration
 FROM node:20-slim
 
 RUN corepack enable && corepack prepare pnpm@10.29.1 --activate
