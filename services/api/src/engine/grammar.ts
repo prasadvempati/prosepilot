@@ -113,7 +113,23 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
   const issues: GrammarIssue[] = [];
   const sourceHash = computeHashSync(text);
 
-  const rules: Array<{ pattern: RegExp; replacement: string; category: GrammarIssue["category"]; rule: string; explanation: string }> = [
+  const rules: Array<{ pattern: RegExp; replacement: string | ((match: string, ...groups: string[]) => string); category: GrammarIssue["category"]; rule: string; explanation: string }> = [
+    // === CAPITALIZATION ===
+    // Sentence starts with lowercase after period/exclamation/question
+    { pattern: /([.!?]\s+)([a-z])/g, replacement: "$1$2", category: "grammar", rule: "capitalize_after_period", explanation: "Capitalize the first word of a new sentence." },
+    // Sentence start at beginning of text — capitalize first letter
+    { pattern: /^([a-z])/, replacement: (_m: string, letter: string) => letter.toUpperCase(), category: "grammar", rule: "capitalize_sentence_start", explanation: "Capitalize the first word of a sentence." },
+    // Product/brand names — Prosepilot → ProsePilot
+    { pattern: /\bProsepilot\b/g, replacement: "ProsePilot", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'ProsePilot' should be capitalized correctly." },
+    { pattern: /\bGrammarly\b/gi, replacement: "Grammarly", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'Grammarly' should be capitalized correctly." },
+    { pattern: /\bMicrosoft\b/gi, replacement: "Microsoft", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'Microsoft' should be capitalized correctly." },
+    { pattern: /\bGoogle\b/gi, replacement: "Google", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'Google' should be capitalized correctly." },
+    { pattern: /\bOpenai\b/g, replacement: "OpenAI", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'OpenAI' should be capitalized correctly." },
+    { pattern: /\bDeepseek\b/g, replacement: "DeepSeek", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'DeepSeek' should be capitalized correctly." },
+    // "the edge" → "The Edge" (Microsoft Edge product)
+    { pattern: /\bthe edge\b/gi, replacement: "The Edge", category: "grammar", rule: "proper_noun_article", explanation: "'The Edge' is a proper noun (product name) and should be capitalized." },
+
+    // === PUNCTUATION ===
     // Space before comma/period/semicolon/colon
     { pattern: /(\w) ,/g, replacement: "$1,", category: "punctuation", rule: "space_before_comma", explanation: "Remove space before comma." },
     { pattern: /(\w) \./g, replacement: "$1.", category: "punctuation", rule: "space_before_period", explanation: "Remove space before period." },
@@ -123,8 +139,32 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     { pattern: /(\w) \)/g, replacement: "$1)", category: "punctuation", rule: "space_before_paren", explanation: "Remove space before closing parenthesis." },
     // Double spaces
     { pattern: /  +/g, replacement: " ", category: "style", rule: "double_space", explanation: "Remove extra spaces." },
-    // Sentence starts with lowercase after period
-    { pattern: /([.!?]\s+)([a-z])/g, replacement: "$1$2", category: "punctuation", rule: "lowercase_after_period", explanation: "Sentence should start with a capital letter." },
+    // Missing period at end of sentence
+    { pattern: /^([^.!?}\n"]+)$/m, replacement: "$1.", category: "punctuation", rule: "missing_period", explanation: "Sentences should end with a period." },
+    // Double punctuation
+    { pattern: /\.\./g, replacement: "...", category: "punctuation", rule: "double_period", explanation: "Use an ellipsis (...) not double periods." },
+
+    // === WORD FORM ERRORS ===
+    // Gerund after possessive/preposition — should be noun
+    { pattern: /\bour discussing\b/gi, replacement: "our discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after a possessive, not the gerund 'discussing'." },
+    { pattern: /\btheir discussing\b/gi, replacement: "their discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after a possessive, not the gerund 'discussing'." },
+    { pattern: /\bthe discussing\b/gi, replacement: "the discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after 'the', not the gerund 'discussing'." },
+    { pattern: /\ba discussing\b/gi, replacement: "a discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after 'a', not the gerund 'discussing'." },
+    { pattern: /\bduring discussing\b/gi, replacement: "during the discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use 'during the discussion', not 'during discussing'." },
+    { pattern: /\bper our discussing\b/gi, replacement: "Per our discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after 'our', not the gerund 'discussing'." },
+
+    // === ADJECTIVE-NOUN WORD ORDER ===
+    // Common reversed pairs in property management
+    { pattern: /\bupgrade premium\b/gi, replacement: "premium upgrade", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'premium upgrade' not 'upgrade premium'." },
+    { pattern: /\breport inspection\b/gi, replacement: "inspection report", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'inspection report' not 'report inspection'." },
+    { pattern: /\binspection site visit\b/gi, replacement: "site visit inspection", category: "style", rule: "adjective_noun_order", explanation: "Reorder: 'site visit inspection' not 'inspection site visit'." },
+    { pattern: /\btile shower\b/gi, replacement: "shower tile", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'shower tile' not 'tile shower'." },
+    { pattern: /\bschedule gate\b/gi, replacement: "gate schedule", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'gate schedule' not 'schedule gate'." },
+    { pattern: /\btrim border\b/gi, replacement: "border trim", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'border trim' not 'trim border'." },
+    { pattern: /\blist units\b/gi, replacement: "unit list", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'unit list' not 'list units'." },
+    { pattern: /\bcondition exterior\b/gi, replacement: "exterior condition", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'exterior condition' not 'condition exterior'." },
+    { pattern: /\breadiness unit\b/gi, replacement: "unit readiness", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'unit readiness' not 'readiness unit'." },
+    { pattern: /\bupdates progress\b/gi, replacement: "progress updates", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'progress updates' not 'updates progress'." },
   ];
 
   for (const rule of rules) {
@@ -133,10 +173,21 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     while ((match = rule.pattern.exec(text)) !== null) {
       const start = match.index;
       const end = start + match[0].length;
-      const fixed = match[0].replace(rule.pattern, rule.replacement);
+
+      // Compute replacement using the pattern's replacement string/function
+      let fixed: string;
+      if (typeof rule.replacement === "function") {
+        fixed = match[0].replace(rule.pattern, rule.replacement as any);
+      } else if (match.length > 1) {
+        // Has capture groups — use the replacement with $1, $2 etc.
+        fixed = match[0].replace(rule.pattern, rule.replacement);
+      } else {
+        // No capture groups — use the replacement string directly
+        fixed = rule.replacement;
+      }
 
       // Only add if the fix actually changes something
-      if (fixed !== match[0]) {
+      if (fixed && fixed !== match[0]) {
         issues.push({
           id: `rule_${randomUUID().slice(0, 8)}`,
           category: rule.category,
@@ -224,11 +275,21 @@ CRITICAL RULES:
 4. If you're unsure about exact text, skip the issue
 
 SPECIFIC PATTERNS TO CHECK:
-- Compound words: "fireplace" (not "fire place"), "wide-spread" → "widespread", "no longer operable" → "inoperable"
-- Spelling: "leasing" used as adjective → "leased" (past participle)
-- Punctuation: semicolons before independent clauses ("LLC; the service")
-- Conciseness: "I would like to recommend to have" → "I want to recommend having"
-- Verbosity: "We would like to request" → "We want to request"; "no longer operable" → "inoperable"
+- PROPER NOUNS: Product/brand names MUST be capitalized correctly: "prosepilot" → "ProsePilot", "grammarly" → "Grammarly", "deepseek" → "DeepSeek", "openai" → "OpenAI", "microsoft" → "Microsoft"
+- ARTICLE CAPITALIZATION: "the edge" → "The Edge" (when referring to a product), "the internet" → "The Internet" (when used as a proper noun)
+- SENTENCE START: First word of every sentence must be capitalized
+- COMPOUND WORDS: "fireplace" (not "fire place"), "widespread" (not "wide-spread"), "inoperable" (not "no longer operable")
+- SPELLING: "leasing" used as adjective → "leased" (past participle)
+- PUNCTUATION: semicolons before independent clauses ("LLC; the service")
+- CONCISENESS: "I would like to recommend to have" → "I want to recommend having"; "We would like to request" → "We want to request"
+- PASSIVE VOICE: Flag passive constructions when active voice is clearer
+- MISSING AUXILIARY VERB: "work orders completed" → "work orders were completed"; "the unit delayed" → "the unit was delayed"; "the project finished" → "the project was finished" — passive constructions missing "was/were/is/are/been"
+- WORDINESS: Flag unnecessary words and phrases
+- WRONG WORD FORM: Gerunds used where nouns are needed. "Per our discussing" → "Per our discussion"; "Due to the happening" → "Due to the event"; "Based on our meeting discussing" → "Based on our meeting discussion" — after possessives (our, their, the, a, an) and prepositions (of, for, during, after, before, per, based on), use the NOUN form not the gerund (-ing form)
+- ADJECTIVE-NOUN WORD ORDER: Adjectives come BEFORE nouns in English. "upgrade premium" → "premium upgrade"; "report inspection" → "inspection report"; "tile shower" → "shower tile"; "schedule gate" → "gate schedule"; "trim border" → "border trim" — when two nouns are used together, the describing noun becomes an adjective and goes first
+- REDUNDANT WORDS: "efforts troubleshooting" → "troubleshooting efforts"; "ready units vacant" → "vacant ready units" — check for reversed adjective-noun pairs
+
+Be AGGRESSIVE about finding issues. Even small improvements count. Return issues for EVERY mistake you find, no matter how minor.
 
 Only return issues you are confident about. Return an empty array if the text is clean.
 
@@ -315,23 +376,28 @@ Return ONLY the JSON array, no other text.`;
 function mergeAllIssues(ruleIssues: GrammarIssue[], ltIssues: GrammarIssue[], aiIssues: GrammarIssue[]): GrammarIssue[] {
   // Start with rule-based issues (highest priority — always correct)
   const merged = [...ruleIssues];
+  const usedTexts = new Set(ruleIssues.map((i) => i.original.toLowerCase()));
   const usedPositions = new Set(ruleIssues.map((i) => `${i.startUtf16}-${i.endUtf16}`));
 
   // Add LT issues that don't overlap with rule-based
   for (const ltIssue of ltIssues) {
-    const key = `${ltIssue.startUtf16}-${ltIssue.endUtf16}`;
-    if (!usedPositions.has(key)) {
+    const posKey = `${ltIssue.startUtf16}-${ltIssue.endUtf16}`;
+    const textKey = ltIssue.original.toLowerCase();
+    if (!usedPositions.has(posKey) && !usedTexts.has(textKey)) {
       merged.push(ltIssue);
-      usedPositions.add(key);
+      usedPositions.add(posKey);
+      usedTexts.add(textKey);
     }
   }
 
   // Add AI issues that don't overlap with any existing issue
   for (const aiIssue of aiIssues) {
-    const key = `${aiIssue.startUtf16}-${aiIssue.endUtf16}`;
-    if (!usedPositions.has(key)) {
+    const posKey = `${aiIssue.startUtf16}-${aiIssue.endUtf16}`;
+    const textKey = aiIssue.original.toLowerCase();
+    if (!usedPositions.has(posKey) && !usedTexts.has(textKey)) {
       merged.push(aiIssue);
-      usedPositions.add(key);
+      usedPositions.add(posKey);
+      usedTexts.add(textKey);
     }
   }
 

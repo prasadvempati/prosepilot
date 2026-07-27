@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ProsePilot",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "Your Writing Co-Pilot — Fix grammar, clarity, and tone instantly on any website.",
   "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
   "host_permissions": ["https://prosepilot.io/*", "http://localhost:3001/*"],

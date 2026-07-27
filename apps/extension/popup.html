@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { width: 320px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    body { width: 360px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
     .header { background: #6366f1; color: white; padding: 16px; display: flex; align-items: center; gap: 8px; }
     .header svg { width: 20px; height: 20px; }
     .header h1 { font-size: 16px; font-weight: 600; }
@@ -12,16 +12,32 @@
     .status { padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
     .status.ready { background: #ecfdf5; color: #065f46; }
     .status.error { background: #fef2f2; color: #991b1b; }
+    .status.info { background: #eff6ff; color: #1e40af; }
     .btn { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
     .btn-primary { background: #6366f1; color: white; }
     .btn-primary:hover { background: #4f46e5; }
     .btn-secondary { background: #f3f4f6; color: #374151; margin-top: 8px; }
     .btn-secondary:hover { background: #e5e7eb; }
+    .btn-accept-all { background: #059669; color: white; margin-top: 8px; }
+    .btn-accept-all:hover { background: #047857; }
     .issues { margin-top: 12px; }
-    .issue { padding: 8px; background: #f9fafb; border-radius: 6px; margin-bottom: 6px; font-size: 12px; }
-    .issue .category { color: #6366f1; font-weight: 500; }
-    .issue .original { color: #dc2626; text-decoration: line-through; }
-    .issue .replacement { color: #059669; }
+    .issue { padding: 10px; background: #f9fafb; border-radius: 6px; margin-bottom: 8px; font-size: 12px; border-left: 3px solid #6366f1; }
+    .issue.accepted { border-left-color: #059669; background: #ecfdf5; }
+    .issue.rejected { border-left-color: #9ca3af; background: #f3f4f6; opacity: 0.6; }
+    .issue .category { color: #6366f1; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+    .issue .original { color: #dc2626; text-decoration: line-through; display: block; margin: 4px 0; }
+    .issue .arrow { color: #9ca3af; }
+    .issue .replacement { color: #059669; font-weight: 500; display: block; margin-bottom: 4px; }
+    .issue .explanation { color: #6b7280; font-size: 11px; line-height: 1.4; margin-top: 4px; }
+    .issue .actions { display: flex; gap: 6px; margin-top: 8px; }
+    .issue .actions button { flex: 1; padding: 6px 10px; border: none; border-radius: 4px; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+    .btn-accept { background: #dcfce7; color: #166534; }
+    .btn-accept:hover { background: #bbf7d0; }
+    .btn-reject { background: #fee2e2; color: #991b1b; }
+    .btn-reject:hover { background: #fecaca; }
+    .btn-accept:disabled, .btn-reject:disabled { opacity: 0.4; cursor: not-allowed; }
+    .issue .accepted-label { color: #059669; font-weight: 600; font-size: 12px; }
+    .issue .rejected-label { color: #9ca3af; font-size: 12px; }
     .footer { padding: 12px 16px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; text-align: center; }
     .footer a { color: #6366f1; text-decoration: none; }
     #loading { display: none; text-align: center; padding: 20px; color: #6b7280; }
@@ -40,6 +56,7 @@
     <div id="status" class="status ready">Ready to check</div>
     
     <button id="checkBtn" class="btn btn-primary">Check Selection</button>
+    <button id="acceptAllBtn" class="btn btn-accept-all" style="display:none;">Accept All Fixes</button>
     <button id="settingsBtn" class="btn btn-secondary">Settings</button>
     
     <div id="loading">Checking grammar...</div>
