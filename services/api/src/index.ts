@@ -10,6 +10,15 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync } from "fs";
 
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+  process.exit(1);
+});
+process.on("unhandledRejection", (err) => {
+  console.error("UNHANDLED REJECTION:", err);
+  process.exit(1);
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -64,8 +73,8 @@ if (existsSync(webDistPath)) {
 
 // --- Start ---
 
-const port = parseInt(process.env.PORT || "3001", 10);
-const host = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+const port = parseInt(process.env.PORT || "8080", 10);
+const host = "0.0.0.0";
 
 try {
   await app.listen({ port, host });
