@@ -36,10 +36,15 @@ await app.register(rateLimit, {
 
 // Clerk auth — only in production
 if (process.env.CLERK_SECRET_KEY) {
-  await app.register(clerkPlugin, {
-    secretKey: process.env.CLERK_SECRET_KEY,
-  });
-  console.log("Clerk auth enabled");
+  try {
+    await app.register(clerkPlugin, {
+      secretKey: process.env.CLERK_SECRET_KEY,
+    });
+    console.log("Clerk auth enabled");
+  } catch (err) {
+    console.error("Clerk plugin failed to load:", err);
+    console.log("Continuing without Clerk auth");
+  }
 } else {
   console.log("Clerk auth disabled (no CLERK_SECRET_KEY)");
 }
