@@ -257,11 +257,9 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
   const mergedIssues = mergeAllIssues(ruleIssues, ltIssues, aiIssues);
 
   // Voice profile filtering: remove style deviations that match user's habits
-  console.log(`[GRAMMAR] voiceProfile=${!!voiceProfile}, samples=${voiceProfile?.sampleCount}, mergedIssues=${mergedIssues.length}`);
   const allIssues = voiceProfile
     ? mergedIssues.filter(issue => shouldShowIssue(voiceProfile, issue))
     : mergedIssues;
-  console.log(`[GRAMMAR] after filtering: ${allIssues.length} issues (was ${mergedIssues.length})`);
 
   const latencyMs = Date.now() - startTime;
   const sourceHash = await computeHash(text);

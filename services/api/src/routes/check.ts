@@ -22,9 +22,6 @@ export async function checkRoutes(app: FastifyInstance) {
     try {
       // Look up voice profile if provided
       const voiceProfile = voiceProfileId ? getProfile(voiceProfileId) : undefined;
-      if (voiceProfileId) {
-        console.log(`[CHECK] voiceProfileId=${voiceProfileId}, found=${!!voiceProfile}, samples=${voiceProfile?.sampleCount}`);
-      }
 
       const result = await checkGrammar({ text, mode, language, documentType, voiceProfile });
       return reply.send(result);
