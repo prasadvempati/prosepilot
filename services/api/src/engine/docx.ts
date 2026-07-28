@@ -153,7 +153,7 @@ export async function processDocx(docxBuffer: Buffer): Promise<DocxResult> {
 
   for (const para of paragraphsChecked) {
     try {
-      const result = await checkGrammar({ text: para.text, mode: "review" });
+      const result = await checkGrammar({ text: para.text, mode: "review", lightweight: true });
       for (const issue of result.issues) {
         allIssues.push({
           paragraphIndex: para.index,

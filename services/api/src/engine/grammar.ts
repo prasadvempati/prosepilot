@@ -220,9 +220,9 @@ function computeHashSync(text: string): string {
   return `sha256:${Math.abs(hash).toString(16).padStart(8, "0")}`;
 }
 
-export async function checkGrammar(request: CheckRequest): Promise<CheckResponse> {
+export async function checkGrammar(request: CheckRequest & { lightweight?: boolean }): Promise<CheckResponse> {
   const startTime = Date.now();
-  const { text, mode } = request;
+  const { text, mode, lightweight } = request;
 
   // Tier 0: Rule-based (instant, free)
   const ruleIssues = detectRuleBasedIssues(text);
@@ -230,9 +230,9 @@ export async function checkGrammar(request: CheckRequest): Promise<CheckResponse
   // Tier 1: LanguageTool (free, self-hosted)
   const ltIssues = await callLanguageTool(text);
 
-  // Tier 2: DeepSeek for clarity/tone (always run in review mode)
+  // Tier 2: DeepSeek for clarity/tone (skip in lightweight mode for speed)
   let aiIssues: GrammarIssue[] = [];
-  if (mode === "rewrite" || mode === "report" || mode === "review" || ltIssues.length > 0) {
+  if (!lightweight && (mode === "rewrite" || mode === "report" || mode === "review" || ltIssues.length > 0)) {
     aiIssues = await callDeepSeekForIssues(text);
   }
 
