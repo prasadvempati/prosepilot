@@ -1,5 +1,5 @@
-import type { CheckRequest, CheckResponse, GrammarIssue, RewriteRequest, RewriteResponse, ProtectedFact } from "@prosepilot/writing-core";
-import { extractProtectedFacts, validateFacts, computeHash } from "@prosepilot/writing-core";
+import type { CheckRequest, CheckResponse, GrammarIssue, RewriteRequest, RewriteResponse, ProtectedFact, VoiceProfile } from "@prosepilot/writing-core";
+import { extractProtectedFacts, validateFacts, computeHash, shouldShowIssue } from "@prosepilot/writing-core";
 import { randomUUID } from "crypto";
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY!;
@@ -220,9 +220,9 @@ function computeHashSync(text: string): string {
   return `sha256:${Math.abs(hash).toString(16).padStart(8, "0")}`;
 }
 
-export async function checkGrammar(request: CheckRequest & { lightweight?: boolean; rulesOnly?: boolean }): Promise<CheckResponse> {
+export async function checkGrammar(request: CheckRequest & { lightweight?: boolean; rulesOnly?: boolean; voiceProfile?: VoiceProfile | null }): Promise<CheckResponse> {
   const startTime = Date.now();
-  const { text, mode, lightweight, rulesOnly } = request;
+  const { text, mode, lightweight, rulesOnly, voiceProfile } = request;
 
   // Tier 0: Rule-based (instant, free)
   const ruleIssues = detectRuleBasedIssues(text);
@@ -254,7 +254,12 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
   }
 
   // Merge: rule-based + LT + AI, deduplicate by offset proximity
-  const allIssues = mergeAllIssues(ruleIssues, ltIssues, aiIssues);
+  const mergedIssues = mergeAllIssues(ruleIssues, ltIssues, aiIssues);
+
+  // Voice profile filtering: remove style deviations that match user's habits
+  const allIssues = voiceProfile
+    ? mergedIssues.filter(issue => shouldShowIssue(voiceProfile, issue))
+    : mergedIssues;
 
   const latencyMs = Date.now() - startTime;
   const sourceHash = await computeHash(text);

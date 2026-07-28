@@ -8,6 +8,7 @@ import { healthRoutes } from "./routes/health.js";
 import { usageRoutes } from "./routes/usage.js";
 import { billingRoutes } from "./routes/billing.js";
 import { documentRoutes } from "./routes/documents.js";
+import { voiceProfileRoutes } from "./routes/voice-profile.js";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync } from "fs";
@@ -57,6 +58,7 @@ await app.register(checkRoutes);
 await app.register(usageRoutes);
 await app.register(billingRoutes);
 await app.register(documentRoutes);
+await app.register(voiceProfileRoutes);
 
 // --- Serve Frontend & SPA Fallback ---
 

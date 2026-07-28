@@ -4,11 +4,12 @@ import { Editor } from "./components/Editor";
 import { SuggestionPanel } from "./components/SuggestionPanel";
 import { RewritePanel } from "./components/RewritePanel";
 import { DocumentChecker } from "./components/DocumentChecker";
+import { VoiceProfilePanel } from "./components/VoiceProfilePanel";
 import { Header } from "./components/Header";
 import { Pricing } from "./components/Pricing";
 import { useGrammarStore } from "./hooks/useGrammarStore";
 
-type Tab = "check" | "rewrite" | "document";
+type Tab = "check" | "rewrite" | "document" | "voice";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("check");
@@ -68,11 +69,26 @@ export default function App() {
                 Word Doc
               </span>
             </button>
+            <button
+              onClick={() => setTab("voice")}
+              className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                tab === "voice"
+                  ? "bg-surface-0 text-brand-600 shadow-sm"
+                  : "text-ink-500 hover:text-ink-700"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                My Voice
+              </span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Editor - hidden when document tab is active */}
-            {tab !== "document" && (
+            {/* Editor - hidden when document/voice tab is active */}
+            {tab !== "document" && tab !== "voice" && (
               <div className="card p-0 overflow-hidden">
                 <Editor
                   text={text}
@@ -87,7 +103,7 @@ export default function App() {
             )}
 
             {/* Results */}
-            <div className={tab === "document" ? "lg:col-span-2" : ""}>
+            <div className={tab === "document" || tab === "voice" ? "lg:col-span-2" : ""}>
               {tab === "check" ? (
                 <SuggestionPanel
                   issues={issues}
@@ -102,8 +118,10 @@ export default function App() {
                   isRewriting={isRewriting}
                   originalText={text}
                 />
-              ) : (
+              ) : tab === "document" ? (
                 <DocumentChecker />
+              ) : (
+                <VoiceProfilePanel />
               )}
             </div>
           </div>

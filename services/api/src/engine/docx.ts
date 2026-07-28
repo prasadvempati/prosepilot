@@ -29,15 +29,21 @@ interface DocxResult {
   };
 }
 
-// Extract paragraphs from word/document.xml
+// Extract paragraphs from word/document.xml using simple string splitting
+// (avoids catastrophic regex backtracking on complex XML)
 function extractParagraphs(docXml: string): DocxParagraph[] {
   const paragraphs: DocxParagraph[] = [];
-  const pRegex = /<w:p[\s>](?:[^<]|<(?!\/w:p>))*<\/w:p>/gs;
-  let match: RegExpExecArray | null;
+  // Split on </w:p> boundaries — simple and O(n)
+  const parts = docXml.split("</w:p>");
   let index = 0;
 
-  while ((match = pRegex.exec(docXml)) !== null) {
-    const pXml = match[0];
+  for (const part of parts) {
+    // Only process parts that contain <w:p (actual paragraph elements)
+    const pStart = part.lastIndexOf("<w:p");
+    if (pStart === -1) continue;
+
+    const pXml = part.slice(pStart) + "</w:p>";
+
     // Extract text from <w:t> elements
     const tRegex = /<w:t[^>]*>([^<]*)<\/w:t>/g;
     let text = "";
