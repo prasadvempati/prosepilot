@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { checkGrammar } from "./grammar.js";
+import type { VoiceProfile } from "@prosepilot/writing-core";
 
 interface DocxParagraph {
   index: number;
@@ -138,7 +139,7 @@ function escapeXml(text: string): string {
 }
 
 // Main processing function
-export async function processDocx(docxBuffer: Buffer): Promise<DocxResult> {
+export async function processDocx(docxBuffer: Buffer, voiceProfile?: VoiceProfile | null): Promise<DocxResult> {
   console.log(`[docx] Starting processing, buffer size: ${docxBuffer.length}`);
 
   // 1. Load the .docx ZIP
@@ -166,7 +167,7 @@ export async function processDocx(docxBuffer: Buffer): Promise<DocxResult> {
   for (const para of paragraphsChecked) {
     try {
       const result = await Promise.race([
-        checkGrammar({ text: para.text, mode: "review", rulesOnly: true }),
+        checkGrammar({ text: para.text, mode: "review", rulesOnly: true, voiceProfile }),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
       ]);
       for (const issue of result.issues) {

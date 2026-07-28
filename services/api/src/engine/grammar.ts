@@ -229,14 +229,17 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
 
   // If rulesOnly mode (for docx processing), skip all API calls
   if (rulesOnly) {
+    const filteredIssues = voiceProfile
+      ? ruleIssues.filter(issue => shouldShowIssue(voiceProfile, issue))
+      : ruleIssues;
     const latencyMs = Date.now() - startTime;
     const sourceHash = await computeHash(text);
     return {
-      issues: ruleIssues,
+      issues: filteredIssues,
       updatedHash: sourceHash,
       usage: {
         characterCount: text.length,
-        issueCount: ruleIssues.length,
+        issueCount: filteredIssues.length,
         checkMode: mode,
         latencyMs,
         engineTier: "rule",

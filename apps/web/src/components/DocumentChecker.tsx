@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useGrammarStore } from "../hooks/useGrammarStore";
 
 interface DocxIssue {
   paragraphIndex: number;
@@ -31,6 +32,7 @@ export function DocumentChecker() {
   const [result, setResult] = useState<DocxResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const voiceProfileId = useGrammarStore((s) => s.voiceProfileId);
   const [isDragging, setIsDragging] = useState(false);
 
   const handleFile = (f: File) => {
@@ -64,7 +66,11 @@ export function DocumentChecker() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("https://prosepilot.io/v1/documents/check", {
+      const url = voiceProfileId
+        ? `https://prosepilot.io/v1/documents/check?voiceProfileId=${encodeURIComponent(voiceProfileId)}`
+        : "https://prosepilot.io/v1/documents/check";
+
+      const res = await fetch(url, {
         method: "POST",
         body: formData,
       });

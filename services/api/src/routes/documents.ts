@@ -1,10 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { processDocx } from "../engine/docx.js";
+import { getProfile } from "./voice-profile.js";
 
 export async function documentRoutes(app: FastifyInstance) {
   // POST /v1/documents/check — Upload .docx, get grammar report + processed files
   app.post("/v1/documents/check", async (request, reply) => {
     try {
+      const voiceProfileId = (request.query as any)?.voiceProfileId;
+      const voiceProfile = voiceProfileId ? getProfile(voiceProfileId) : undefined;
+
       const data = await request.file();
       if (!data) {
         return reply.status(400).send({
@@ -31,12 +35,12 @@ export async function documentRoutes(app: FastifyInstance) {
         });
       }
 
-      console.log(`[docx] Processing ${data.filename} (${docxBuffer.length} bytes)`);
+      console.log(`[docx] Processing ${data.filename} (${docxBuffer.length} bytes)` + (voiceProfile ? ` with voice profile (${voiceProfile.sampleCount} samples)` : ""));
 
       // Process the document
       let result;
       try {
-        result = await processDocx(docxBuffer);
+        result = await processDocx(docxBuffer, voiceProfile);
       } catch (procErr: any) {
         console.error("[docx] processDocx failed:", procErr);
         return reply.status(400).send({
