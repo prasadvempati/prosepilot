@@ -20,12 +20,8 @@ export async function documentRoutes(app: FastifyInstance) {
         });
       }
 
-      // Collect file chunks
-      const chunks: Buffer[] = [];
-      for await (const chunk of data.file) {
-        chunks.push(chunk);
-      }
-      const docxBuffer = Buffer.concat(chunks);
+      // Collect file buffer using toBuffer() (more reliable than async iteration)
+      const docxBuffer = await data.toBuffer();
 
       // Limit: 5MB
       if (docxBuffer.length > 5 * 1024 * 1024) {
@@ -35,8 +31,21 @@ export async function documentRoutes(app: FastifyInstance) {
         });
       }
 
+      console.log(`[docx] Processing ${data.filename} (${docxBuffer.length} bytes)`);
+
       // Process the document
-      const result = await processDocx(docxBuffer);
+      let result;
+      try {
+        result = await processDocx(docxBuffer);
+      } catch (procErr: any) {
+        console.error("[docx] processDocx failed:", procErr);
+        return reply.status(400).send({
+          error: "INVALID_DOCX",
+          message: `Failed to process document: ${procErr.message}`,
+        });
+      }
+
+      console.log(`[docx] Found ${result.issues.length} issues in ${result.summary.paragraphsChecked} paragraphs`);
 
       // Store buffers temporarily (in memory, keyed by timestamp)
       const sessionId = `docx_${Date.now()}`;
