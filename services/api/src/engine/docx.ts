@@ -133,8 +133,11 @@ function escapeXml(text: string): string {
 
 // Main processing function
 export async function processDocx(docxBuffer: Buffer): Promise<DocxResult> {
+  console.log(`[docx] Starting processing, buffer size: ${docxBuffer.length}`);
+
   // 1. Load the .docx ZIP
   const zip = await JSZip.loadAsync(docxBuffer);
+  console.log(`[docx] ZIP loaded, files: ${Object.keys(zip.files).join(", ")}`);
 
   // 2. Get the main document XML
   const docXmlFile = zip.file("word/document.xml");
@@ -142,10 +145,13 @@ export async function processDocx(docxBuffer: Buffer): Promise<DocxResult> {
     throw new Error("Invalid .docx file: word/document.xml not found");
   }
   const docXml = await docXmlFile.async("string");
+  console.log(`[docx] Document XML loaded, length: ${docXml.length}`);
 
   // 3. Extract paragraphs
   const paragraphs = extractParagraphs(docXml);
+  console.log(`[docx] Extracted ${paragraphs.length} paragraphs`);
   const paragraphsChecked = paragraphs.filter((p) => p.text.length >= 10).slice(0, 10); // Max 10 paragraphs
+  console.log(`[docx] ${paragraphsChecked.length} paragraphs to check (>=10 chars, max 10)`);
 
   // 4. Check grammar on each paragraph (with per-paragraph timeout)
   const allIssues: DocxIssue[] = [];
