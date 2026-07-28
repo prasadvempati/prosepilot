@@ -1,5 +1,7 @@
 // ProsePilot Background Service Worker
 
+const API_BASE = "https://prosepilot.io";
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "prosepilot-check",
@@ -22,6 +24,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === "applyFix") {
     handleApplyFix(message.original, message.replacement, sendResponse);
+    return true;
+  }
+
+  if (message.action === "checkInline") {
+    handleCheckInline(message.text, sendResponse);
     return true;
   }
 });
@@ -145,5 +152,48 @@ async function handleApplyFix(original, replacement, sendResponse) {
     sendResponse(results?.[0]?.result || { success: false, reason: "script-error" });
   } catch (err) {
     sendResponse({ error: "Failed to apply fix: " + err.message });
+  }
+}
+
+// --- Inline grammar check (called by content script) ---
+const inlineCache = new Map();
+
+async function handleCheckInline(text, sendResponse) {
+  try {
+    // Cache check — don't re-check same text
+    const cacheKey = text.trim().toLowerCase();
+    if (inlineCache.has(cacheKey)) {
+      sendResponse({ issues: inlineCache.get(cacheKey) });
+      return;
+    }
+
+    const response = await fetch(`${API_BASE}/v1/check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, mode: "review" }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      sendResponse({ issues: [] });
+      return;
+    }
+
+    const data = await response.json();
+    const issues = (data.issues || []).map((i) => ({
+      id: i.id,
+      category: i.category,
+      original: i.original,
+      replacement: i.replacement,
+      explanation: i.explanation,
+    }));
+
+    // Cache for 60 seconds
+    inlineCache.set(cacheKey, issues);
+    setTimeout(() => inlineCache.delete(cacheKey), 60000);
+
+    sendResponse({ issues });
+  } catch (err) {
+    sendResponse({ issues: [] });
   }
 }
