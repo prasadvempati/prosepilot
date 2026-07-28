@@ -232,6 +232,49 @@ export default function App() {
             </div>
           </section>
 
+          {/* Privacy */}
+          <section className="py-20 bg-surface-50">
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="card p-10 md:p-14">
+                <div className="flex flex-col md:flex-row items-start gap-10">
+                  <div className="flex-shrink-0">
+                    <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center">
+                      <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-ink-900 mb-3">Your writing stays yours</h2>
+                    <p className="text-ink-500 leading-relaxed mb-5 max-w-xl">
+                      ProsePilot never uses your text to train AI models. Your documents, emails, and drafts are processed in real-time and discarded immediately. We don't store, sell, or share your writing with anyone.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-medium">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        No data training
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-medium">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        No text storage
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-medium">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        You own your voice profile
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Pricing */}
           <Pricing />
 
