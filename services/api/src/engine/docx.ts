@@ -145,15 +145,18 @@ export async function processDocx(docxBuffer: Buffer): Promise<DocxResult> {
 
   // 3. Extract paragraphs
   const paragraphs = extractParagraphs(docXml);
-  const paragraphsChecked = paragraphs.filter((p) => p.text.length >= 10);
+  const paragraphsChecked = paragraphs.filter((p) => p.text.length >= 10).slice(0, 10); // Max 10 paragraphs
 
-  // 4. Check grammar on each paragraph
+  // 4. Check grammar on each paragraph (with per-paragraph timeout)
   const allIssues: DocxIssue[] = [];
   const categories: Record<string, number> = {};
 
   for (const para of paragraphsChecked) {
     try {
-      const result = await checkGrammar({ text: para.text, mode: "review", lightweight: true });
+      const result = await Promise.race([
+        checkGrammar({ text: para.text, mode: "review", lightweight: true }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
+      ]);
       for (const issue of result.issues) {
         allIssues.push({
           paragraphIndex: para.index,
