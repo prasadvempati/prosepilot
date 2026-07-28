@@ -14,11 +14,11 @@ import { existsSync } from "fs";
 
 process.on("uncaughtException", (err) => {
   console.error("UNCAUGHT EXCEPTION:", err);
-  process.exit(1);
+  // Don't exit — keep serving other requests
 });
 process.on("unhandledRejection", (err) => {
   console.error("UNHANDLED REJECTION:", err);
-  process.exit(1);
+  // Don't exit — keep serving other requests
 });
 
 const __filename = fileURLToPath(import.meta.url);
