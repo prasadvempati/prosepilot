@@ -160,7 +160,7 @@ export async function processDocx(docxBuffer: Buffer): Promise<DocxResult> {
   for (const para of paragraphsChecked) {
     try {
       const result = await Promise.race([
-        checkGrammar({ text: para.text, mode: "review", lightweight: true }),
+        checkGrammar({ text: para.text, mode: "review", rulesOnly: true }),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
       ]);
       for (const issue of result.issues) {

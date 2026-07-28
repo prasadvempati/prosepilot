@@ -220,12 +220,29 @@ function computeHashSync(text: string): string {
   return `sha256:${Math.abs(hash).toString(16).padStart(8, "0")}`;
 }
 
-export async function checkGrammar(request: CheckRequest & { lightweight?: boolean }): Promise<CheckResponse> {
+export async function checkGrammar(request: CheckRequest & { lightweight?: boolean; rulesOnly?: boolean }): Promise<CheckResponse> {
   const startTime = Date.now();
-  const { text, mode, lightweight } = request;
+  const { text, mode, lightweight, rulesOnly } = request;
 
   // Tier 0: Rule-based (instant, free)
   const ruleIssues = detectRuleBasedIssues(text);
+
+  // If rulesOnly mode (for docx processing), skip all API calls
+  if (rulesOnly) {
+    const latencyMs = Date.now() - startTime;
+    const sourceHash = await computeHash(text);
+    return {
+      issues: ruleIssues,
+      updatedHash: sourceHash,
+      usage: {
+        characterCount: text.length,
+        issueCount: ruleIssues.length,
+        checkMode: mode,
+        latencyMs,
+        engineTier: "rule",
+      },
+    };
+  }
 
   // Tier 1: LanguageTool (free, self-hosted)
   const ltIssues = await callLanguageTool(text);
