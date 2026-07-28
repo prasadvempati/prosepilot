@@ -3,11 +3,12 @@ import { Show, SignInButton, SignUpButton } from "@clerk/react";
 import { Editor } from "./components/Editor";
 import { SuggestionPanel } from "./components/SuggestionPanel";
 import { RewritePanel } from "./components/RewritePanel";
+import { DocumentChecker } from "./components/DocumentChecker";
 import { Header } from "./components/Header";
 import { Pricing } from "./components/Pricing";
 import { useGrammarStore } from "./hooks/useGrammarStore";
 
-type Tab = "check" | "rewrite";
+type Tab = "check" | "rewrite" | "document";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("check");
@@ -52,24 +53,41 @@ export default function App() {
                 Rewrite
               </span>
             </button>
+            <button
+              onClick={() => setTab("document")}
+              className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                tab === "document"
+                  ? "bg-surface-0 text-brand-600 shadow-sm"
+                  : "text-ink-500 hover:text-ink-700"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Word Doc
+              </span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Editor */}
-            <div className="card p-0 overflow-hidden">
-              <Editor
-                text={text}
-                onChange={setText}
-                onCheck={() => checkGrammar()}
-                onRewrite={() => rewriteText()}
-                isChecking={isChecking}
-                isRewriting={isRewriting}
-                mode={tab}
-              />
-            </div>
+            {/* Editor - hidden when document tab is active */}
+            {tab !== "document" && (
+              <div className="card p-0 overflow-hidden">
+                <Editor
+                  text={text}
+                  onChange={setText}
+                  onCheck={() => checkGrammar()}
+                  onRewrite={() => rewriteText()}
+                  isChecking={isChecking}
+                  isRewriting={isRewriting}
+                  mode={tab}
+                />
+              </div>
+            )}
 
             {/* Results */}
-            <div>
+            <div className={tab === "document" ? "lg:col-span-2" : ""}>
               {tab === "check" ? (
                 <SuggestionPanel
                   issues={issues}
@@ -78,12 +96,14 @@ export default function App() {
                   hasChecked={hasChecked}
                   error={checkError}
                 />
-              ) : (
+              ) : tab === "rewrite" ? (
                 <RewritePanel
                   result={rewriteResult}
                   isRewriting={isRewriting}
                   originalText={text}
                 />
+              ) : (
+                <DocumentChecker />
               )}
             </div>
           </div>

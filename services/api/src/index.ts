@@ -2,10 +2,12 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
+import multipart from "@fastify/multipart";
 import { checkRoutes } from "./routes/check.js";
 import { healthRoutes } from "./routes/health.js";
 import { usageRoutes } from "./routes/usage.js";
 import { billingRoutes } from "./routes/billing.js";
+import { documentRoutes } from "./routes/documents.js";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync } from "fs";
@@ -42,12 +44,19 @@ await app.register(rateLimit, {
   timeWindow: "1 minute",
 });
 
+await app.register(multipart, {
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+});
+
 // --- API Routes ---
 
 await app.register(healthRoutes);
 await app.register(checkRoutes);
 await app.register(usageRoutes);
 await app.register(billingRoutes);
+await app.register(documentRoutes);
 
 // --- Serve Frontend & SPA Fallback ---
 
