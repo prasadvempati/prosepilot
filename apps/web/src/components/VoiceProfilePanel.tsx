@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useGrammarStore } from "../hooks/useGrammarStore";
 
 interface VoiceProfileData {
   id: string;
@@ -23,13 +24,17 @@ export function VoiceProfilePanel() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(false);
+  const setVoiceProfileId = useGrammarStore((s) => s.setVoiceProfileId);
 
   // Load existing profile on mount
   useEffect(() => {
     fetch("/v1/voice-profile")
       .then(r => r.json())
       .then(data => {
-        if (data.profile) setProfile(data);
+        if (data.profile) {
+          setProfile(data);
+          setVoiceProfileId(data.profile.id);
+        }
       })
       .catch(() => {});
   }, []);
@@ -55,6 +60,7 @@ export function VoiceProfilePanel() {
 
       const data = await res.json();
       setProfile(data);
+      setVoiceProfileId(data.profile?.id || null);
       setMessage(data.message || "Voice profile updated");
       setSampleText("");
     } catch (err) {
@@ -68,6 +74,7 @@ export function VoiceProfilePanel() {
     try {
       await fetch("/v1/voice-profile", { method: "DELETE" });
       setProfile(null);
+      setVoiceProfileId(null);
       setMessage("Voice profile deleted");
     } catch (err) {
       setMessage("Failed to delete profile");

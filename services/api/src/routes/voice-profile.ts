@@ -5,6 +5,11 @@ import { createEmptyProfile, analyzeText, mergeAnalyses, getProfileSummary } fro
 // In-memory store (keyed by userId)
 const profiles = new Map<string, VoiceProfile>();
 
+// Export for use by other routes (grammar check, document check)
+export function getProfile(userId: string): VoiceProfile | undefined {
+  return profiles.get(userId);
+}
+
 export async function voiceProfileRoutes(app: FastifyInstance) {
   // GET /v1/voice-profile — Get user's voice profile
   app.get("/v1/voice-profile", async (request, reply) => {

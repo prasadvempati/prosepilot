@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { checkGrammar, rewriteText, validateFactsEndpoint } from "../engine/grammar.js";
+import { getProfile } from "./voice-profile.js";
 
 export async function checkRoutes(app: FastifyInstance) {
   // POST /v1/check - Grammar, spelling, punctuation, clarity, style issues
   app.post("/v1/check", async (request, reply) => {
-    const { text, mode = "review", language = "en-US", documentType = "general" } = request.body as any;
+    const { text, mode = "review", language = "en-US", documentType = "general", voiceProfileId } = request.body as any;
 
     if (!text || typeof text !== "string") {
       return reply.status(400).send({ error: "TEXT_REQUIRED", message: "Text field is required" });
@@ -19,7 +20,10 @@ export async function checkRoutes(app: FastifyInstance) {
     }
 
     try {
-      const result = await checkGrammar({ text, mode, language, documentType });
+      // Look up voice profile if provided
+      const voiceProfile = voiceProfileId ? getProfile(voiceProfileId) : undefined;
+
+      const result = await checkGrammar({ text, mode, language, documentType, voiceProfile });
       return reply.send(result);
     } catch (error) {
       app.log.error(error);

@@ -10,6 +10,8 @@ interface GrammarStore {
   isChecking: boolean;
   hasChecked: boolean;
   checkError: string | null;
+  voiceProfileId: string | null;
+  setVoiceProfileId: (id: string | null) => void;
   checkGrammar: () => Promise<void>;
 
   // Rewrite
@@ -69,6 +71,8 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
   isChecking: false,
   hasChecked: false,
   checkError: null,
+  voiceProfileId: null,
+  setVoiceProfileId: (id) => set({ voiceProfileId: id }),
 
   tone: "professional",
   setTone: (tone) => set({ tone }),
@@ -79,7 +83,7 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
   history: [],
 
   checkGrammar: async () => {
-    const { text } = get();
+    const { text, voiceProfileId } = get();
     if (!text.trim()) return;
 
     set({ isChecking: true, issues: [], checkError: null, hasChecked: false });
@@ -88,7 +92,7 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
       const response = await fetch(`${API_BASE}/v1/check`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, mode: "review" }),
+        body: JSON.stringify({ text, mode: "review", voiceProfileId }),
       });
 
       if (!response.ok) {

@@ -30,7 +30,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export function SuggestionPanel({ issues, originalText, isChecking, hasChecked, error }: SuggestionPanelProps) {
-  const { applyIssue, dismissIssue, applyAll, undo, history } = useGrammarStore();
+  const { applyIssue, dismissIssue, applyAll, undo, history, voiceProfileId } = useGrammarStore();
 
   if (isChecking) {
     return (
@@ -119,6 +119,14 @@ export function SuggestionPanel({ issues, originalText, isChecking, hasChecked, 
               )}
               {warningCount > 0 && (
                 <span className="badge-warning">{warningCount} warning{warningCount !== 1 ? "s" : ""}</span>
+              )}
+              {voiceProfileId && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-50 text-brand-600 rounded-full text-xs font-medium">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  Voice Profile Active
+                </span>
               )}
             </div>
           </div>
