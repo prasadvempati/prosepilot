@@ -58,3 +58,12 @@ export const feedbackEvents = pgTable("feedback_events", {
   modelVersion: varchar("model_version", { length: 50 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const voiceProfiles = pgTable("voice_profiles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 255 }).default("My Voice"),
+  profileData: jsonb("profile_data").notNull(), // Full VoiceProfile stats (no raw text)
+  sampleCount: integer("sample_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});

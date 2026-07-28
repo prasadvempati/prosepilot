@@ -21,7 +21,7 @@ export async function checkRoutes(app: FastifyInstance) {
 
     try {
       // Use local voice profile if available
-      const voiceProfile = getProfile();
+      const voiceProfile = await getProfile();
 
       const result = await checkGrammar({ text, mode, language, documentType, voiceProfile });
       return reply.send(result);

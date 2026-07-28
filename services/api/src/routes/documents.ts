@@ -7,7 +7,7 @@ export async function documentRoutes(app: FastifyInstance) {
   // POST /v1/documents/check — Upload .docx, get grammar report + processed files
   app.post("/v1/documents/check", async (request, reply) => {
     try {
-      const voiceProfile = getProfile();
+      const voiceProfile = await getProfile();
 
       const data = await request.file();
       if (!data) {

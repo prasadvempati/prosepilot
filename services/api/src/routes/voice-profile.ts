@@ -1,19 +1,69 @@
 import type { FastifyInstance } from "fastify";
 import type { VoiceProfile } from "@prosepilot/writing-core";
 import { createEmptyProfile, analyzeText, mergeAnalyses, getProfileSummary } from "@prosepilot/writing-core";
+import { db } from "../db/index.js";
+import { voiceProfiles } from "../db/schema.js";
+import { eq } from "drizzle-orm";
 
-// Single in-memory profile — no per-user storage, no user identification
-const LOCAL_PROFILE_KEY = "local";
+// Single profile — cached in memory, persisted to PostgreSQL
+const LOCAL_PROFILE_ID = "00000000-0000-0000-0000-000000000001";
 let localProfile: VoiceProfile | null = null;
+let dbLoaded = false;
+
+// Load profile from database on first access
+async function ensureLoaded(): Promise<void> {
+  if (dbLoaded) return;
+  try {
+    const rows = await db.select().from(voiceProfiles).where(eq(voiceProfiles.id, LOCAL_PROFILE_ID)).limit(1);
+    if (rows.length > 0) {
+      localProfile = rows[0].profileData as unknown as VoiceProfile;
+      localProfile!.id = rows[0].id;
+      localProfile!.sampleCount = rows[0].sampleCount ?? 0;
+    }
+  } catch {
+    // Table may not exist yet — fall through to in-memory
+  }
+  dbLoaded = true;
+}
 
 // Export for use by other routes (grammar check, document check)
-export function getProfile(): VoiceProfile | undefined {
+export async function getProfile(): Promise<VoiceProfile | undefined> {
+  await ensureLoaded();
   return localProfile ?? undefined;
+}
+
+// Sync version for backwards compatibility — returns cached value only
+export function getProfileSync(): VoiceProfile | undefined {
+  return localProfile ?? undefined;
+}
+
+async function saveProfile(profile: VoiceProfile): Promise<void> {
+  try {
+    const existing = await db.select().from(voiceProfiles).where(eq(voiceProfiles.id, LOCAL_PROFILE_ID)).limit(1);
+    if (existing.length > 0) {
+      await db.update(voiceProfiles).set({
+        profileData: profile as any,
+        sampleCount: profile.sampleCount,
+        name: profile.name,
+        updatedAt: new Date(),
+      }).where(eq(voiceProfiles.id, LOCAL_PROFILE_ID));
+    } else {
+      await db.insert(voiceProfiles).values({
+        id: LOCAL_PROFILE_ID as any,
+        name: profile.name,
+        profileData: profile as any,
+        sampleCount: profile.sampleCount,
+      });
+    }
+  } catch {
+    // Database save failed — profile still works in-memory for this session
+  }
 }
 
 export async function voiceProfileRoutes(app: FastifyInstance) {
   // GET /v1/voice-profile — Get voice profile
   app.get("/v1/voice-profile", async (_request, reply) => {
+    await ensureLoaded();
     if (!localProfile) {
       return reply.send({ profile: null, summary: null });
     }
@@ -38,9 +88,11 @@ export async function voiceProfileRoutes(app: FastifyInstance) {
       });
     }
 
+    await ensureLoaded();
+
     // Get existing profile or create new one
     if (!localProfile) {
-      localProfile = createEmptyProfile(LOCAL_PROFILE_KEY, name || "My Voice");
+      localProfile = createEmptyProfile(LOCAL_PROFILE_ID, name || "My Voice");
     }
 
     // Analyze the new text
@@ -57,6 +109,9 @@ export async function voiceProfileRoutes(app: FastifyInstance) {
       updatedAt: new Date().toISOString(),
       ...(name ? { name } : {}),
     };
+
+    // Persist to database
+    await saveProfile(localProfile);
 
     return reply.send({
       profile: localProfile,
@@ -83,6 +138,11 @@ export async function voiceProfileRoutes(app: FastifyInstance) {
   // DELETE /v1/voice-profile — Reset voice profile
   app.delete("/v1/voice-profile", async (_request, reply) => {
     localProfile = null;
+    try {
+      await db.delete(voiceProfiles).where(eq(voiceProfiles.id, LOCAL_PROFILE_ID));
+    } catch {
+      // Ignore — profile cleared from memory
+    }
     return reply.send({ message: "Voice profile deleted" });
   });
 }
