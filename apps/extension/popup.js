@@ -51,6 +51,9 @@ window.rejectIssue = function(id) {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Inject content script on popup open (no host_permissions needed)
+  chrome.runtime.sendMessage({ action: "injectContentScript" }, () => {});
+
   const checkBtn = document.getElementById("checkBtn");
   const acceptAllBtn = document.getElementById("acceptAllBtn");
   const settingsBtn = document.getElementById("settingsBtn");

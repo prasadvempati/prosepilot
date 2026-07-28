@@ -53,7 +53,7 @@ async function callLanguageTool(text: string): Promise<GrammarIssue[]> {
       };
     });
   } catch (error) {
-    console.error("LanguageTool error:", error);
+    // LanguageTool unavailable — fall through to other tiers
     return [];
   }
 }
@@ -370,7 +370,7 @@ Return ONLY the JSON array, no other text.`;
       const foundIndex = text.indexOf(original);
       if (foundIndex === -1) {
         // Original text not found at all — skip this issue
-        console.warn(`DeepSeek issue skipped: "${original}" not found in text`);
+        // Skip silently — do not log user text
         continue;
       }
 
@@ -393,7 +393,7 @@ Return ONLY the JSON array, no other text.`;
 
     return validated;
   } catch (error) {
-    console.error("DeepSeek check error:", error);
+    // DeepSeek unavailable — return empty results
     return [];
   }
 }

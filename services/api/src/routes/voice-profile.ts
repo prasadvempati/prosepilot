@@ -2,34 +2,31 @@ import type { FastifyInstance } from "fastify";
 import type { VoiceProfile } from "@prosepilot/writing-core";
 import { createEmptyProfile, analyzeText, mergeAnalyses, getProfileSummary } from "@prosepilot/writing-core";
 
-// In-memory store (keyed by userId)
-const profiles = new Map<string, VoiceProfile>();
+// Single in-memory profile — no per-user storage, no user identification
+const LOCAL_PROFILE_KEY = "local";
+let localProfile: VoiceProfile | null = null;
 
 // Export for use by other routes (grammar check, document check)
-export function getProfile(userId: string): VoiceProfile | undefined {
-  return profiles.get(userId);
+export function getProfile(): VoiceProfile | undefined {
+  return localProfile ?? undefined;
 }
 
 export async function voiceProfileRoutes(app: FastifyInstance) {
-  // GET /v1/voice-profile — Get user's voice profile
-  app.get("/v1/voice-profile", async (request, reply) => {
-    const userId = (request.query as any)?.userId || "default";
-    const profile = profiles.get(userId);
-
-    if (!profile) {
+  // GET /v1/voice-profile — Get voice profile
+  app.get("/v1/voice-profile", async (_request, reply) => {
+    if (!localProfile) {
       return reply.send({ profile: null, summary: null });
     }
 
     return reply.send({
-      profile,
-      summary: getProfileSummary(profile),
+      profile: localProfile,
+      summary: getProfileSummary(localProfile),
     });
   });
 
   // POST /v1/voice-profile — Create or update voice profile from text samples
   app.post("/v1/voice-profile", async (request, reply) => {
-    const { userId = "default", text, name } = request.body as {
-      userId?: string;
+    const { text, name } = request.body as {
       text: string;
       name?: string;
     };
@@ -42,32 +39,29 @@ export async function voiceProfileRoutes(app: FastifyInstance) {
     }
 
     // Get existing profile or create new one
-    let profile = profiles.get(userId);
-    if (!profile) {
-      profile = createEmptyProfile(userId, name || "My Voice");
+    if (!localProfile) {
+      localProfile = createEmptyProfile(LOCAL_PROFILE_KEY, name || "My Voice");
     }
 
     // Analyze the new text
     const analysis = analyzeText(text);
 
     // Merge with existing profile
-    const merged = mergeAnalyses(profile, analysis, profile.sampleCount);
+    const merged = mergeAnalyses(localProfile, analysis, localProfile.sampleCount);
 
     // Update profile
-    profile = {
-      ...profile,
+    localProfile = {
+      ...localProfile,
       ...merged,
-      sampleCount: profile.sampleCount + 1,
+      sampleCount: localProfile.sampleCount + 1,
       updatedAt: new Date().toISOString(),
       ...(name ? { name } : {}),
     };
 
-    profiles.set(userId, profile);
-
     return reply.send({
-      profile,
-      summary: getProfileSummary(profile),
-      message: `Voice profile updated from ${profile.sampleCount} sample(s)`,
+      profile: localProfile,
+      summary: getProfileSummary(localProfile),
+      message: `Voice profile updated from ${localProfile.sampleCount} sample(s)`,
     });
   });
 
@@ -87,9 +81,8 @@ export async function voiceProfileRoutes(app: FastifyInstance) {
   });
 
   // DELETE /v1/voice-profile — Reset voice profile
-  app.delete("/v1/voice-profile", async (request, reply) => {
-    const userId = (request.body as any)?.userId || "default";
-    profiles.delete(userId);
+  app.delete("/v1/voice-profile", async (_request, reply) => {
+    localProfile = null;
     return reply.send({ message: "Voice profile deleted" });
   });
 }

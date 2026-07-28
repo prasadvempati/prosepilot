@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "crypto";
 import { processDocx } from "../engine/docx.js";
 import { getProfile } from "./voice-profile.js";
 
@@ -6,8 +7,7 @@ export async function documentRoutes(app: FastifyInstance) {
   // POST /v1/documents/check — Upload .docx, get grammar report + processed files
   app.post("/v1/documents/check", async (request, reply) => {
     try {
-      const voiceProfileId = (request.query as any)?.voiceProfileId;
-      const voiceProfile = voiceProfileId ? getProfile(voiceProfileId) : undefined;
+      const voiceProfile = getProfile();
 
       const data = await request.file();
       if (!data) {
@@ -35,24 +35,19 @@ export async function documentRoutes(app: FastifyInstance) {
         });
       }
 
-      console.log(`[docx] Processing ${data.filename} (${docxBuffer.length} bytes)` + (voiceProfile ? ` with voice profile (${voiceProfile.sampleCount} samples)` : ""));
-
       // Process the document
       let result;
       try {
         result = await processDocx(docxBuffer, voiceProfile);
       } catch (procErr: any) {
-        console.error("[docx] processDocx failed:", procErr);
         return reply.status(400).send({
           error: "INVALID_DOCX",
-          message: `Failed to process document: ${procErr.message}`,
+          message: "Failed to process document",
         });
       }
 
-      console.log(`[docx] Found ${result.issues.length} issues in ${result.summary.paragraphsChecked} paragraphs`);
-
-      // Store buffers temporarily (in memory, keyed by timestamp)
-      const sessionId = `docx_${Date.now()}`;
+      // Store buffers temporarily with random session ID (not predictable)
+      const sessionId = randomUUID();
       (global as any).__docxSessions = (global as any).__docxSessions || {};
       (global as any).__docxSessions[sessionId] = {
         clean: result.cleanBuffer,
@@ -60,8 +55,8 @@ export async function documentRoutes(app: FastifyInstance) {
         created: Date.now(),
       };
 
-      // Clean up sessions older than 10 minutes
-      const cutoff = Date.now() - 10 * 60 * 1000;
+      // Clean up sessions older than 5 minutes
+      const cutoff = Date.now() - 5 * 60 * 1000;
       for (const [key, session] of Object.entries((global as any).__docxSessions)) {
         if ((session as any).created < cutoff) {
           delete (global as any).__docxSessions[key];
@@ -78,10 +73,9 @@ export async function documentRoutes(app: FastifyInstance) {
         },
       });
     } catch (error: any) {
-      app.log.error(error);
       return reply.status(500).send({
         error: "PROCESSING_ERROR",
-        message: error.message || "Failed to process document",
+        message: "Failed to process document",
       });
     }
   });
@@ -115,6 +109,10 @@ export async function documentRoutes(app: FastifyInstance) {
 
     reply.header("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+
+    // Clean up this session after download
+    delete (global as any).__docxSessions[sessionId];
+
     return reply.send(buffer);
   });
 }

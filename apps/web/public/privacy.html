@@ -18,6 +18,8 @@
     a { color: #7c3aed; }
     .highlight { background: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0; }
     .highlight p { margin-bottom: 0; color: #166534; }
+    .warning { background: #fef2f2; border-left: 4px solid #ef4444; padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0; }
+    .warning p { margin-bottom: 0; color: #991b1b; }
   </style>
 </head>
 <body>
@@ -26,45 +28,113 @@
     <p class="updated">Last updated: July 28, 2026</p>
 
     <div class="highlight">
-      <p><strong>Your writing stays yours.</strong> ProsePilot never uses your text to train AI models. Your documents are processed in real-time and discarded immediately.</p>
+      <p><strong>Your writing stays yours. Forever.</strong> ProsePilot does not store, retain, log, or collect the text you submit for grammar checking. Your documents are processed in real-time and immediately discarded. We have no data to sell, share, or hand over to anyone — because we never keep it.</p>
     </div>
 
-    <h2>What We Collect</h2>
-    <p>ProsePilot collects minimal data to provide the service:</p>
+    <h2>1. No Text Storage — Zero Retention Policy</h2>
+    <p>ProsePilot operates on a <strong>zero-retention architecture</strong>:</p>
     <ul>
-      <li><strong>Account information:</strong> Email address and name (via Clerk authentication)</li>
-      <li><strong>Voice profile:</strong> Writing style analysis stored locally on our servers, associated with your account</li>
-      <li><strong>Usage metadata:</strong> Number of checks performed, features used (not the content of your writing)</li>
+      <li>Text submitted for grammar checking is processed in real-time and <strong>immediately discarded</strong> from memory after the response is returned</li>
+      <li>We do <strong>not</strong> store your text in databases, logs, caches, backups, or any other storage system</li>
+      <li>We do <strong>not</strong> retain copies of uploaded documents — they are deleted from server memory within minutes of processing</li>
+      <li>We do <strong>not</strong> log request bodies containing your text — our server logging is configured to exclude all user content</li>
+      <li>After processing, your text exists only on your device — we have no way to access it again</li>
     </ul>
 
-    <h2>What We Never Do</h2>
+    <h2>2. No Data Selling, Sharing, or Third-Party Transfer</h2>
+    <p>ProsePilot does <strong>not</strong>:</p>
     <ul>
-      <li>We <strong>never</strong> store the text you submit for grammar checking</li>
-      <li>We <strong>never</strong> use your writing to train AI models</li>
-      <li>We <strong>never</strong> sell or share your data with third parties</li>
-      <li>We <strong>never</strong> read or access your documents outside of real-time processing</li>
+      <li>Sell, rent, or trade your personal information or writing content to any third party</li>
+      <li>Share your text, documents, or writing samples with advertisers, data brokers, analytics providers, or any other third parties</li>
+      <li>Transfer your data to servers outside of our hosting infrastructure</li>
+      <li>Use your text for targeted advertising, profiling, or marketing purposes</li>
+      <li>Provide access to your data to any government agency unless legally compelled by a valid court order specific to identifiable user accounts</li>
     </ul>
 
-    <h2>How Grammar Checking Works</h2>
-    <p>When you submit text for checking, it is processed in real-time by our AI engine. The text is sent over an encrypted connection, analyzed, and the results are returned to you. The original text is <strong>not stored</strong> after processing is complete.</p>
+    <h2>3. No AI Training on Your Content</h2>
+    <p>ProsePilot does <strong>not</strong> use your text, documents, or writing samples to train, fine-tune, or improve any AI models — whether our own or those of third-party AI providers. Your writing is processed for grammar analysis only and is not retained beyond the real-time processing session.</p>
 
-    <h2>Voice Profiles</h2>
-    <p>Voice profiles analyze your writing style (sentence length, vocabulary, punctuation habits) to personalize grammar suggestions. The profile stores statistical patterns, not your actual text. You can delete your voice profile at any time from the app settings.</p>
+    <h2>4. What We Do Collect</h2>
+    <p>ProsePilot collects only the minimum data necessary to provide the service:</p>
+    <ul>
+      <li><strong>Account information:</strong> Email address and display name, collected solely for authentication via Clerk. We do not use this for marketing.</li>
+      <li><strong>Usage metadata:</strong> Aggregate counts of grammar checks performed, features used, and approximate character counts — <strong>never</strong> the content of your writing. This data is used solely for billing and service improvement.</li>
+      <li><strong>Voice profile (optional):</strong> Statistical analysis of writing style (sentence length averages, punctuation patterns, vocabulary ratios). These are numerical statistics derived from text you voluntarily submit. The original text is discarded after analysis. The profile can be deleted at any time.</li>
+    </ul>
 
-    <h2>Word Document Processing</h2>
-    <p>When you upload a .docx file, it is processed entirely on our server. The file and its contents are deleted immediately after processing. We do not retain copies of uploaded documents.</p>
+    <h2>5. How Grammar Checking Works</h2>
+    <p>When you submit text for checking:</p>
+    <ul>
+      <li>Your text is sent over a TLS-encrypted connection to our server</li>
+      <li>Our grammar engine analyzes the text in memory (RAM)</li>
+      <li>Grammar suggestions are returned to your device</li>
+      <li>Your text is <strong>immediately discarded</strong> from server memory after the response is sent</li>
+      <li>No log entry is created containing your text</li>
+      <li>No database record is created containing your text</li>
+      <li>No backup or archive contains your text</li>
+    </ul>
 
-    <h2>Browser Extension</h2>
-    <p>The ProsePilot browser extension checks text you select on web pages. Text is sent to our API for processing only when you explicitly click "Check Selection." The extension does not read or transmit any other page content.</p>
+    <h2>6. Document Processing</h2>
+    <p>When you upload a .docx file:</p>
+    <ul>
+      <li>The file is processed entirely in server memory (RAM)</li>
+      <li>Processed results (grammar report, fixed document, tracked-changes document) are stored temporarily in memory for download — <strong>maximum 5 minutes</strong></li>
+      <li>After download or after 5 minutes (whichever comes first), all buffers are deleted from memory</li>
+      <li>No documents are written to disk, uploaded to cloud storage, or retained in any form</li>
+      <li>Download sessions use cryptographically random identifiers — not predictable or enumerable</li>
+    </ul>
 
-    <h2>Data Security</h2>
-    <p>All data is transmitted over TLS-encrypted connections. We follow industry-standard security practices to protect your information.</p>
+    <h2>7. Browser Extension</h2>
+    <p>The ProsePilot browser extension:</p>
+    <ul>
+      <li>Checks text you select or type <strong>only when you explicitly trigger a check</strong> (by clicking the extension icon or a button)</li>
+      <li>Does not continuously monitor, record, or transmit your browsing activity</li>
+      <li>Does not read page content beyond the text you choose to check</li>
+      <li>Stores grammar suggestions locally in your browser for up to 60 seconds — this data never leaves your device</li>
+      <li>Does not collect telemetry, analytics, or usage data</li>
+    </ul>
 
-    <h2>Changes to This Policy</h2>
-    <p>We may update this privacy policy from time to time. Changes will be posted on this page with an updated date.</p>
+    <h2>8. Third-Party Services</h2>
+    <p>ProsePilot uses the following third-party services:</p>
+    <ul>
+      <li><strong>Clerk (Authentication):</strong> Handles user sign-up and sign-in. Clerk's privacy policy governs authentication data. We do not store passwords.</li>
+      <li><strong>Stripe (Payments):</strong> Processes payments. Stripe's privacy policy governs payment data. We do not store credit card numbers.</li>
+      <li><strong>DeepSeek (AI Processing):</strong> Text submitted for grammar checking may be processed by DeepSeek's API. DeepSeek's terms of service govern how they handle API inputs. We do not control DeepSeek's data retention policies for API inputs.</li>
+    </ul>
 
-    <h2>Contact</h2>
-    <p>If you have questions about this privacy policy, contact us at <a href="mailto:privacy@prosepilot.io">privacy@prosepilot.io</a>.</p>
+    <div class="warning">
+      <p><strong>Important:</strong> When you submit text for grammar checking, your text is transmitted to DeepSeek's API for processing. While we do not store your text on our servers, DeepSeek's own data handling policies apply to text processed through their API. We encourage users to review DeepSeek's privacy policy. For sensitive or confidential documents, consider using our Tier 0 rule-based checking only, which processes text locally without sending to external APIs.</p>
+    </div>
+
+    <h2>9. Data Security</h2>
+    <ul>
+      <li>All data is transmitted over TLS-encrypted connections (HTTPS)</li>
+      <li>Our API server is hosted on Railway's infrastructure with industry-standard security</li>
+      <li>API endpoints are rate-limited to prevent abuse</li>
+      <li>We do not store sensitive data that could be compromised in a breach — because we do not store user text at all</li>
+    </ul>
+
+    <h2>10. Your Rights</h2>
+    <p>You have the right to:</p>
+    <ul>
+      <li><strong>Access:</strong> Request a copy of any personal data we hold about you (account information and usage metadata only — we hold no writing content)</li>
+      <li><strong>Deletion:</strong> Request deletion of your account and all associated data at any time</li>
+      <li><strong>Voice Profile Deletion:</strong> Delete your voice profile at any time from the app settings</li>
+      <li><strong>Data Portability:</strong> Export your usage data in a machine-readable format</li>
+      <li><strong>Opt-Out:</strong> Use the service without creating an account (extension-only usage)</li>
+    </ul>
+
+    <h2>11. Children's Privacy</h2>
+    <p>ProsePilot is not directed to children under 13. We do not knowingly collect data from children under 13. If we become aware that a child under 13 has provided us with personal information, we will take steps to delete such information promptly.</p>
+
+    <h2>12. Changes to This Policy</h2>
+    <p>We may update this privacy policy from time to time. Material changes will be posted on this page with an updated date. We will not reduce your rights under this policy without your explicit consent.</p>
+
+    <h2>13. Contact</h2>
+    <p>For questions about this privacy policy or to exercise your data rights, contact us at <a href="mailto:privacy@prosepilot.io">privacy@prosepilot.io</a>.</p>
+
+    <h2>14. Governing Law</h2>
+    <p>This privacy policy is governed by the laws of the State of Texas, United States, without regard to conflict of law principles.</p>
   </div>
 </body>
 </html>

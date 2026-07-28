@@ -36,7 +36,6 @@ export async function billingRoutes(app: FastifyInstance) {
 
       return { url: session.url };
     } catch (error) {
-      console.error("Checkout error:", error);
       return reply.code(500).send({ error: "Failed to create checkout session" });
     }
   });
@@ -56,7 +55,6 @@ export async function billingRoutes(app: FastifyInstance) {
 
       return { url: session.url };
     } catch (error) {
-      console.error("Portal error:", error);
       return reply.code(500).send({ error: "Failed to create portal session" });
     }
   });
@@ -78,7 +76,6 @@ export async function billingRoutes(app: FastifyInstance) {
         endpointSecret
       );
     } catch (err) {
-      console.error("Webhook signature verification failed:", err);
       return reply.code(400).send({ error: "Webhook signature verification failed" });
     }
 

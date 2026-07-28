@@ -13,13 +13,13 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync } from "fs";
 
-process.on("uncaughtException", (err) => {
-  console.error("UNCAUGHT EXCEPTION:", err);
+process.on("uncaughtException", () => {
   // Don't exit — keep serving other requests
+  // Don't log error details — they may contain user text
 });
-process.on("unhandledRejection", (err) => {
-  console.error("UNHANDLED REJECTION:", err);
+process.on("unhandledRejection", () => {
   // Don't exit — keep serving other requests
+  // Don't log error details — they may contain user text
 });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,7 +27,16 @@ const __dirname = dirname(__filename);
 
 const app = Fastify({
   logger: {
-    level: process.env.NODE_ENV === "production" ? "info" : "debug",
+    level: process.env.NODE_ENV === "production" ? "warn" : "warn",
+    // Never log request/response bodies — user text must not appear in logs
+    serializers: {
+      req(req) {
+        return { method: req.method, url: req.url };
+      },
+      res(res) {
+        return { statusCode: res.statusCode };
+      },
+    },
   },
 });
 
@@ -89,8 +98,6 @@ const host = "0.0.0.0";
 
 try {
   await app.listen({ port, host });
-  console.log(`ProsePilot API running on http://${host}:${port}`);
 } catch (err) {
-  app.log.error(err);
   process.exit(1);
 }

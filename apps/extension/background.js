@@ -31,6 +31,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleCheckInline(message.text, sendResponse);
     return true;
   }
+
+  if (message.action === "injectContentScript") {
+    handleInjectContentScript(sendResponse);
+    return true;
+  }
 });
 
 async function handleGetSelection(sendResponse) {
@@ -195,5 +200,31 @@ async function handleCheckInline(text, sendResponse) {
     sendResponse({ issues });
   } catch (err) {
     sendResponse({ issues: [] });
+  }
+}
+
+// --- Inject content script on demand (no host_permissions needed) ---
+async function handleInjectContentScript(sendResponse) {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) {
+      sendResponse({ error: "No active tab" });
+      return;
+    }
+
+    if (tab.url && /^(chrome|edge|chrome-extension):\/\//.test(tab.url)) {
+      sendResponse({ error: "Cannot run on browser pages" });
+      return;
+    }
+
+    // Inject content.js into the active tab
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["content.js"],
+    });
+
+    sendResponse({ success: true });
+  } catch (err) {
+    sendResponse({ error: err.message });
   }
 }
