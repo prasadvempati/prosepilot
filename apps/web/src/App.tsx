@@ -7,6 +7,9 @@ import { DocumentChecker } from "./components/DocumentChecker";
 import { VoiceProfilePanel } from "./components/VoiceProfilePanel";
 import { Header } from "./components/Header";
 import { Pricing } from "./components/Pricing";
+import { HeroDemo } from "./components/HeroDemo";
+import { HowItWorks } from "./components/HowItWorks";
+import { SocialProof } from "./components/SocialProof";
 import { useGrammarStore } from "./hooks/useGrammarStore";
 
 type Tab = "check" | "rewrite" | "document" | "voice";
@@ -132,56 +135,83 @@ export default function App() {
       <Show when="signed-out">
         <div className="relative overflow-hidden">
           {/* Hero */}
-          <section className="relative pt-24 pb-32 px-4 sm:px-6 lg:px-8">
-            <div className="absolute inset-0 bg-gradient-to-br from-brand-50 via-surface-50 to-purple-50" />
-            <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-brand-100 rounded-full blur-3xl opacity-30 -translate-y-1/2 translate-x-1/3" />
-            <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-purple-100 rounded-full blur-3xl opacity-30 translate-y-1/2 -translate-x-1/3" />
+          <section className="relative pt-20 pb-32 px-4 sm:px-6 lg:px-8 bg-animated-gradient">
+            {/* Decorative elements */}
+            <div className="absolute top-20 right-10 w-72 h-72 bg-brand-200 rounded-full blur-3xl opacity-40 animate-float" />
+            <div className="absolute bottom-10 left-10 w-96 h-96 bg-purple-200 rounded-full blur-3xl opacity-30 animate-float" style={{ animationDelay: "2s" }} />
             
-            <div className="relative max-w-5xl mx-auto text-center">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-50 border border-brand-100 text-sm font-medium text-brand-700 mb-8 animate-fadeIn">
-                <span className="w-2 h-2 bg-brand-500 rounded-full animate-pulse" />
-                Your Writing Co-Pilot
+            <div className="relative max-w-7xl mx-auto">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                {/* Left: Copy */}
+                <div className="text-center lg:text-left">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-100/80 border border-brand-200 text-sm font-semibold text-brand-700 mb-6 animate-slide-up backdrop-blur-sm">
+                    <span className="w-2 h-2 bg-brand-500 rounded-full animate-pulse" />
+                    Your Writing Co-Pilot
+                  </div>
+                  
+                  <h1 className="text-display-xl text-ink-900 mb-6 animate-slide-up" style={{ animationDelay: "100ms" }}>
+                    Write with{" "}
+                    <span className="gradient-text">
+                      confidence
+                    </span>
+                  </h1>
+                  
+                  <p className="text-xl text-ink-500 max-w-xl mb-10 leading-relaxed animate-slide-up" style={{ animationDelay: "200ms" }}>
+                    Fix grammar, improve clarity, and match your tone — all in one place. 
+                    The writing assistant that works where you do.
+                  </p>
+                  
+                  <div className="flex flex-col sm:flex-row items-center gap-4 animate-slide-up" style={{ animationDelay: "300ms" }}>
+                    <SignUpButton mode="modal">
+                      <button className="btn-glow text-base px-8 py-4 shadow-glow-brand">
+                        Start writing free
+                        <svg className="w-4 h-4 ml-2 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                      </button>
+                    </SignUpButton>
+                    <SignInButton mode="modal">
+                      <button className="btn-secondary text-base px-8 py-4">
+                        Sign in
+                      </button>
+                    </SignInButton>
+                  </div>
+                  
+                  <div className="mt-8 flex flex-wrap items-center gap-6 justify-center lg:justify-start animate-slide-up" style={{ animationDelay: "400ms" }}>
+                    <div className="flex items-center gap-2 text-sm text-ink-500">
+                      <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      No credit card required
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-ink-500">
+                      <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Free forever for basic use
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: Demo */}
+                <div className="animate-slide-up" style={{ animationDelay: "400ms" }}>
+                  <HeroDemo />
+                </div>
               </div>
-              
-              <h1 className="text-display-xl text-ink-900 mb-6 animate-slideUp">
-                Write with{" "}
-                <span className="bg-gradient-to-r from-brand-500 to-purple-500 bg-clip-text text-transparent">
-                  confidence
-                </span>
-              </h1>
-              
-              <p className="text-xl text-ink-500 max-w-2xl mx-auto mb-10 animate-slideUp" style={{ animationDelay: "100ms" }}>
-                Fix grammar, improve clarity, and match your tone — all in one place. 
-                The writing assistant that works where you do.
-              </p>
-              
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slideUp" style={{ animationDelay: "200ms" }}>
-                <SignUpButton mode="modal">
-                  <button className="btn-primary text-base px-8 py-3.5 shadow-glow">
-                    Start writing free
-                    <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                  </button>
-                </SignUpButton>
-                <SignInButton mode="modal">
-                  <button className="btn-secondary text-base px-8 py-3.5">
-                    Sign in
-                  </button>
-                </SignInButton>
-              </div>
-              
-              <p className="mt-6 text-sm text-ink-400 animate-slideUp" style={{ animationDelay: "300ms" }}>
-                No credit card required · Free forever for basic use
-              </p>
             </div>
           </section>
+
+          {/* Social Proof */}
+          <SocialProof />
+
+          {/* How It Works */}
+          <HowItWorks />
 
           {/* Features */}
           <section id="features" className="py-24 bg-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="text-center mb-16">
-                <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface-100 border border-surface-200 text-sm font-medium text-ink-600 mb-6">
+                <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface-50 border border-surface-200 text-sm font-semibold text-ink-700 mb-6">
                   Features
                 </span>
                 <h2 className="text-display-lg text-ink-900 mb-4">Everything you need to write better</h2>
@@ -190,7 +220,7 @@ export default function App() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 stagger-children">
                 {[
                   {
                     icon: (
@@ -199,7 +229,10 @@ export default function App() {
                       </svg>
                     ),
                     title: "Grammar & Spelling",
-                    description: "Catch errors instantly with AI-powered detection that understands context, not just rules."
+                    description: "Catch errors instantly with AI-powered detection that understands context.",
+                    color: "from-rose-500 to-rose-600",
+                    bgColor: "bg-rose-50",
+                    textColor: "text-rose-600",
                   },
                   {
                     icon: (
@@ -208,24 +241,42 @@ export default function App() {
                       </svg>
                     ),
                     title: "Smart Rewrite",
-                    description: "Adjust tone, clarity, and formality with one click. Professional, casual, or anywhere in between."
+                    description: "Adjust tone, clarity, and formality with one click.",
+                    color: "from-brand-500 to-brand-600",
+                    bgColor: "bg-brand-50",
+                    textColor: "text-brand-600",
                   },
                   {
                     icon: (
                       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                     ),
-                    title: "Browser Extension",
-                    description: "Works everywhere you write — Gmail, Slack, Google Docs, LinkedIn, and more."
-                  }
+                    title: "Word Doc Support",
+                    description: "Upload .docx files and download with tracked changes.",
+                    color: "from-blue-500 to-blue-600",
+                    bgColor: "bg-blue-50",
+                    textColor: "text-blue-600",
+                  },
+                  {
+                    icon: (
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    ),
+                    title: "Voice Profile",
+                    description: "Teach ProsePilot your style — it learns how YOU write.",
+                    color: "from-emerald-500 to-emerald-600",
+                    bgColor: "bg-emerald-50",
+                    textColor: "text-emerald-600",
+                  },
                 ].map((feature, i) => (
-                  <div key={i} className="card p-8 text-center hover:shadow-elevated transition-shadow duration-300">
-                    <div className="w-12 h-12 bg-brand-50 rounded-xl flex items-center justify-center text-brand-600 mx-auto mb-5">
+                  <div key={i} className="card-feature p-6 text-center group">
+                    <div className={`w-14 h-14 ${feature.bgColor} rounded-2xl flex items-center justify-center ${feature.textColor} mx-auto mb-5 group-hover:scale-110 transition-transform duration-300`}>
                       {feature.icon}
                     </div>
-                    <h3 className="text-lg font-semibold text-ink-900 mb-3">{feature.title}</h3>
-                    <p className="text-ink-500 leading-relaxed">{feature.description}</p>
+                    <h3 className="text-lg font-bold text-ink-900 mb-2">{feature.title}</h3>
+                    <p className="text-ink-500 text-sm leading-relaxed">{feature.description}</p>
                   </div>
                 ))}
               </div>
@@ -235,10 +286,13 @@ export default function App() {
           {/* Privacy */}
           <section className="py-20 bg-surface-50">
             <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="card p-10 md:p-14">
-                <div className="flex flex-col md:flex-row items-start gap-10">
+              <div className="card-glass p-10 md:p-14 relative overflow-hidden">
+                {/* Background decoration */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-100 rounded-full blur-3xl opacity-40 -translate-y-1/2 translate-x-1/2" />
+                
+                <div className="relative flex flex-col md:flex-row items-start gap-10">
                   <div className="flex-shrink-0">
-                    <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center">
+                    <div className="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center shadow-sm">
                       <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                       </svg>
@@ -246,23 +300,23 @@ export default function App() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-ink-900 mb-3">Your writing stays yours</h2>
-                    <p className="text-ink-500 leading-relaxed mb-5 max-w-xl">
+                    <p className="text-ink-500 leading-relaxed mb-5 max-xl">
                       ProsePilot never uses your text to train AI models. Your documents, emails, and drafts are processed in real-time and discarded immediately. We don't store, sell, or share your writing with anyone.
                     </p>
                     <div className="flex flex-wrap gap-3">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-medium">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                         No data training
                       </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-medium">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                         No text storage
                       </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-medium">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
@@ -283,12 +337,16 @@ export default function App() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gradient-to-br from-brand-400 to-brand-600 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-gradient-to-br from-brand-400 to-brand-600 rounded-lg flex items-center justify-center shadow-sm">
                     <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                   </div>
-                  <span className="font-semibold text-ink-900">ProsePilot</span>
+                  <span className="font-bold text-ink-900">ProsePilot</span>
+                </div>
+                <div className="flex items-center gap-6 text-sm text-ink-500">
+                  <a href="/privacy.html" className="hover:text-ink-700 transition-colors">Privacy</a>
+                  <a href="mailto:support@prosepilot.io" className="hover:text-ink-700 transition-colors">Support</a>
                 </div>
                 <p className="text-sm text-ink-400">
                   © 2026 ProsePilot. Built for professionals who write.

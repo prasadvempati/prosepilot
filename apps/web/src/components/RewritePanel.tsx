@@ -1,4 +1,3 @@
-import { Copy, Replace } from "lucide-react";
 import type { RewriteResult, ProtectedFact } from "@prosepilot/writing-core";
 
 interface RewritePanelProps {
@@ -10,17 +9,27 @@ interface RewritePanelProps {
 export function RewritePanel({ result, isRewriting }: RewritePanelProps) {
   if (isRewriting) {
     return (
-      <div className="card p-8 flex flex-col items-center justify-center text-center">
-        <div className="w-10 h-10 border-3 border-brand-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-sm text-gray-600">Rewriting your text...</p>
+      <div className="card p-12 flex flex-col items-center justify-center text-center">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-surface-200 rounded-full" />
+          <div className="absolute inset-0 w-16 h-16 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+        <p className="text-sm text-ink-700 mt-6 font-semibold">Rewriting your text...</p>
+        <p className="text-xs text-ink-400 mt-1">Adjusting tone and clarity</p>
       </div>
     );
   }
 
   if (!result) {
     return (
-      <div className="card p-8 flex flex-col items-center justify-center text-center">
-        <p className="text-sm text-gray-500">Select a tone and click Rewrite to get started.</p>
+      <div className="card p-12 flex flex-col items-center justify-center text-center">
+        <div className="w-20 h-20 bg-brand-50 rounded-2xl flex items-center justify-center mb-5">
+          <svg className="w-10 h-10 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        </div>
+        <p className="text-ink-700 font-semibold">Select a tone and click Rewrite</p>
+        <p className="text-ink-400 text-sm mt-1">We'll adjust your text while keeping your voice</p>
       </div>
     );
   }
@@ -30,37 +39,45 @@ export function RewritePanel({ result, isRewriting }: RewritePanelProps) {
   };
 
   return (
-    <div className="card">
-      <div className="p-4 border-b border-gray-100">
+    <div className="card overflow-hidden">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-surface-200 bg-surface-0">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Rewritten Text</h2>
-          <div className="flex items-center gap-1.5">
+          <h2 className="text-base font-bold text-ink-900">Rewritten Text</h2>
+          <div className="flex items-center gap-2">
             {result.factMismatch && (
-              <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">
+              <span className="badge-warning">
+                <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
                 Facts changed
               </span>
             )}
-            <span className="text-[10px] px-2 py-0.5 bg-brand-100 text-brand-700 rounded-full font-medium capitalize">
+            <span className="badge-info capitalize">
               {result.tone}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="p-4">
-        <div className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
+      {/* Content */}
+      <div className="p-5">
+        <div className="text-sm leading-relaxed text-ink-700 whitespace-pre-wrap p-4 bg-surface-50 rounded-xl border border-surface-200">
           {result.rewritten}
         </div>
 
         {result.factsProtected.length > 0 && (
-          <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs font-medium text-gray-600 mb-1">Protected Facts</p>
-            <div className="flex flex-wrap gap-1.5">
+          <div className="mt-4 p-4 bg-surface-50 rounded-xl border border-surface-200">
+            <p className="text-xs font-semibold text-ink-600 mb-2 uppercase tracking-wide">Protected Facts</p>
+            <div className="flex flex-wrap gap-2">
               {result.factsProtected.map((fact: ProtectedFact, i: number) => (
                 <span
                   key={i}
-                  className="text-[10px] px-2 py-0.5 bg-white border border-gray-200 rounded-full text-gray-600"
+                  className="inline-flex items-center gap-1 px-3 py-1 bg-white border border-surface-200 rounded-full text-sm text-ink-700 font-medium"
                 >
+                  <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
                   {fact.value}
                 </span>
               ))}
@@ -69,13 +86,18 @@ export function RewritePanel({ result, isRewriting }: RewritePanelProps) {
         )}
       </div>
 
-      <div className="p-4 border-t border-gray-100 flex gap-2">
+      {/* Actions */}
+      <div className="px-5 py-4 border-t border-surface-200 bg-surface-0 flex gap-3">
         <button onClick={handleCopy} className="btn-secondary flex-1 flex items-center justify-center gap-2 text-sm">
-          <Copy className="w-4 h-4" />
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
           Copy
         </button>
-        <button className="btn-primary flex-1 flex items-center justify-center gap-2 text-sm">
-          <Replace className="w-4 h-4" />
+        <button className="btn-glow flex-1 flex items-center justify-center gap-2 text-sm">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
           Replace
         </button>
       </div>

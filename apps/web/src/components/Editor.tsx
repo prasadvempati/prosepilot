@@ -41,9 +41,9 @@ export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewri
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-200">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-200 bg-surface-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-ink-700">Your text</span>
+          <span className="text-sm font-semibold text-ink-700">Your text</span>
           {text.trim() && (
             <span className="badge-info">
               {wordCount} words
@@ -81,27 +81,27 @@ export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewri
         {/* Empty state */}
         {!text.trim() && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-surface-100 flex items-center justify-center">
-                <svg className="w-8 h-8 text-ink-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="text-center animate-fade-in">
+              <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-brand-50 to-purple-50 flex items-center justify-center shadow-sm">
+                <svg className="w-10 h-10 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
               </div>
-              <p className="text-ink-500 text-sm">Paste your text to get started</p>
-              <p className="text-ink-300 text-xs mt-1">Ctrl+V to paste</p>
+              <p className="text-ink-700 font-semibold mb-1">Paste your text to get started</p>
+              <p className="text-ink-400 text-sm">or start typing — we'll check as you go</p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Footer */}
-      <div className="px-4 py-3 border-t border-surface-200 bg-surface-50">
+      {/* Floating Action Bar */}
+      <div className="px-4 py-3 border-t border-surface-200 bg-surface-0">
         <div className="flex items-center justify-between">
           {/* Stats */}
           <div className="flex items-center gap-4 text-xs text-ink-500">
             <span>{charCount.toLocaleString()} characters</span>
-            <span className="text-surface-300">•</span>
-            <span className={charCount > 100000 ? "text-error" : ""}>
+            <span className="text-surface-300">·</span>
+            <span className={charCount > 100000 ? "text-error font-medium" : ""}>
               {charCount > 100000 ? "Over limit" : `${(100000 - charCount).toLocaleString()} remaining`}
             </span>
           </div>
@@ -120,7 +120,7 @@ export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewri
               <button
                 onClick={onCheck}
                 disabled={!text.trim() || isChecking}
-                className="btn-primary flex items-center gap-2"
+                className="btn-glow flex items-center gap-2"
               >
                 {isChecking ? (
                   <>
@@ -140,7 +140,7 @@ export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewri
               <button
                 onClick={onRewrite}
                 disabled={!text.trim() || isRewriting}
-                className="btn-primary flex items-center gap-2"
+                className="btn-glow flex items-center gap-2"
               >
                 {isRewriting ? (
                   <>
