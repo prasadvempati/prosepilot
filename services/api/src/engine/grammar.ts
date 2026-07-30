@@ -157,6 +157,22 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     { pattern: /\bduring discussing\b/gi, replacement: "during the discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use 'during the discussion', not 'during discussing'." },
     { pattern: /\bper our discussing\b/gi, replacement: "Per our discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after 'our', not the gerund 'discussing'." },
 
+    // === UNCOUNTABLE NOUNS ===
+    { pattern: /\bfoods\b/gi, replacement: "food", category: "grammar", rule: "uncountable_noun", explanation: "'Food' is typically uncountable. Use 'food' not 'foods'." },
+    { pattern: /\binformations\b/gi, replacement: "information", category: "grammar", rule: "uncountable_noun", explanation: "'Information' is uncountable. Use 'information' not 'informations'." },
+    { pattern: /\badvices\b/gi, replacement: "advice", category: "grammar", rule: "uncountable_noun", explanation: "'Advice' is uncountable. Use 'advice' not 'advices'." },
+    { pattern: /\bequipments\b/gi, replacement: "equipment", category: "grammar", rule: "uncountable_noun", explanation: "'Equipment' is uncountable. Use 'equipment' not 'equipments'." },
+    { pattern: /\bfurnitures\b/gi, replacement: "furniture", category: "grammar", rule: "uncountable_noun", explanation: "'Furniture' is uncountable. Use 'furniture' not 'furnitures'." },
+    { pattern: /\bstaffs\b/gi, replacement: "staff", category: "grammar", rule: "uncountable_noun", explanation: "'Staff' is typically uncountable. Use 'staff' not 'staffs'." },
+    { pattern: /\bhomeworks\b/gi, replacement: "homework", category: "grammar", rule: "uncountable_noun", explanation: "'Homework' is uncountable. Use 'homework' not 'homeworks'." },
+    { pattern: /\bmails\b/g, replacement: "mail", category: "grammar", rule: "uncountable_noun", explanation: "'Mail' is typically uncountable. Use 'mail' not 'mails'." },
+    { pattern: /\bprogresses\b/gi, replacement: "progress", category: "grammar", rule: "uncountable_noun", explanation: "'Progress' is uncountable. Use 'progress' not 'progresses'." },
+    { pattern: /\bresearches\b/gi, replacement: "research", category: "grammar", rule: "uncountable_noun", explanation: "'Research' is uncountable. Use 'research' not 'researches'." },
+
+    // === MISSING OBJECT PRONOUN ===
+    // "they finished on time" → "they finished it on time"
+    { pattern: /\b(finished|completed|submitted|reviewed|approved|processed|resolved|addressed|handled|finished up|wrapped up) (on time|early|late|before|after|today|yesterday|this week|last week|this month|next week)\b/gi, replacement: "$1 it $2", category: "grammar", rule: "missing_object_pronoun", explanation: "This verb typically needs a direct object. Add 'it' to clarify what was finished." },
+
     // === ADJECTIVE-NOUN WORD ORDER ===
     // Common reversed pairs in property management
     { pattern: /\bupgrade premium\b/gi, replacement: "premium upgrade", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'premium upgrade' not 'upgrade premium'." },
@@ -317,6 +333,9 @@ SPECIFIC PATTERNS TO CHECK:
 - WRONG WORD FORM: Gerunds used where nouns are needed. "Per our discussing" → "Per our discussion"; "Due to the happening" → "Due to the event"; "Based on our meeting discussing" → "Based on our meeting discussion" — after possessives (our, their, the, a, an) and prepositions (of, for, during, after, before, per, based on), use the NOUN form not the gerund (-ing form)
 - ADJECTIVE-NOUN WORD ORDER: Adjectives come BEFORE nouns in English. "upgrade premium" → "premium upgrade"; "report inspection" → "inspection report"; "tile shower" → "shower tile"; "schedule gate" → "gate schedule"; "trim border" → "border trim" — when two nouns are used together, the describing noun becomes an adjective and goes first
 - REDUNDANT WORDS: "efforts troubleshooting" → "troubleshooting efforts"; "ready units vacant" → "vacant ready units" — check for reversed adjective-noun pairs
+- UNCOUNTABLE NOUNS: "foods" → "food"; "informations" → "information"; "advices" → "advice"; "equipments" → "equipment"; "furnitures" → "furniture"; "researches" → "research"; "progresses" → "progress" — these nouns are never pluralized
+- MISSING OBJECT PRONOUN: "they finished on time" → "they finished it on time"; "we submitted early" → "we submitted it early" — transitive verbs like finish, complete, submit, review, approve need a direct object
+- COMMA BEFORE "AND" IN COMPOUND SENTENCES: When two independent clauses (each with a subject + verb) are joined by "and", a comma goes before "and": "The team worked hard and they finished on time" → "The team worked hard, and they finished on time"
 
 Be AGGRESSIVE about finding issues. Even small improvements count. Return issues for EVERY mistake you find, no matter how minor.
 

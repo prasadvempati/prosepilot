@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProsePilot — Employee Testing Guide</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f8f9fa; color: #1a1a2e; line-height: 1.6; }
+    .container { max-width: 680px; margin: 0 auto; padding: 40px 24px; }
+    .header { text-align: center; margin-bottom: 40px; }
+    .logo { width: 48px; height: 48px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+    .logo svg { width: 24px; height: 24px; color: white; }
+    h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+    .subtitle { color: #6b7280; font-size: 15px; }
+    .card { background: white; border-radius: 16px; padding: 32px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e5e7eb; }
+    .card h2 { font-size: 18px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+    .card h2 .icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .step { display: flex; gap: 16px; margin-bottom: 20px; align-items: flex-start; }
+    .step:last-child { margin-bottom: 0; }
+    .step-num { width: 28px; height: 28px; background: #6366f1; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+    .step-text { font-size: 15px; }
+    .step-text strong { color: #1a1a2e; }
+    .step-text span { color: #6b7280; }
+    .url-box { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; font-family: 'SF Mono', monospace; font-size: 15px; color: #6366f1; text-decoration: none; display: block; text-align: center; margin: 16px 0; transition: all 0.2s; }
+    .url-box:hover { background: #e8eaff; border-color: #6366f1; }
+    .test-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .test-item { background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; }
+    .test-item h3 { font-size: 13px; font-weight: 600; color: #6366f1; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .test-item p { font-size: 13px; color: #6b7280; }
+    .note { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 10px; padding: 16px; font-size: 14px; color: #92400e; margin-top: 16px; }
+    .note strong { display: block; margin-bottom: 4px; }
+    .footer { text-align: center; margin-top: 40px; padding-top: 24px; border-top: 1px solid #e5e7eb; color: #9ca3af; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+      </div>
+      <h1>ProsePilot Testing Guide</h1>
+      <p class="subtitle">Employee access instructions — ready to test now</p>
+    </div>
+
+    <!-- How to Sign Up -->
+    <div class="card">
+      <h2>
+        <span class="icon" style="background: #ede9fe; color: #7c3aed;">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+        </span>
+        How to Sign Up
+      </h2>
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text"><strong>Go to prosepilot.io</strong><br><span>Click "Start writing free" on the homepage</span></div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text"><strong>Enter any email address</strong><br><span>No verification code needed — this is a dev environment</span></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text"><strong>Create a password</strong><br><span>Use any password (minimum 8 characters)</span></div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text"><strong>You're in</strong><br><span>You'll land on the editor — start testing immediately</span></div>
+      </div>
+
+      <a href="https://prosepilot.io" class="url-box">prosepilot.io</a>
+
+      <div class="note">
+        <strong>Note for multiple testers</strong>
+        Each tester should use a different email address. There are no restrictions — any email works.
+      </div>
+    </div>
+
+    <!-- What to Test -->
+    <div class="card">
+      <h2>
+        <span class="icon" style="background: #dbeafe; color: #2563eb;">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </span>
+        What to Test
+      </h2>
+      <div class="test-grid">
+        <div class="test-item">
+          <h3>Check Grammar</h3>
+          <p>Paste text with errors, click "Check Grammar", review suggestions, apply or dismiss fixes</p>
+        </div>
+        <div class="test-item">
+          <h3>Smart Rewrite</h3>
+          <p>Paste text, pick a tone (Professional, Casual, etc.), click "Rewrite", copy or replace</p>
+        </div>
+        <div class="test-item">
+          <h3>Word Doc Upload</h3>
+          <p>Upload a .docx file, download a clean version or one with tracked changes</p>
+        </div>
+        <div class="test-item">
+          <h3>Voice Profile</h3>
+          <p>Paste 2-3 of your writing samples, then run grammar check — it adapts to your style</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sample Text to Test -->
+    <div class="card">
+      <h2>
+        <span class="icon" style="background: #d1fae5; color: #059669;">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        </span>
+        Sample Text to Try
+      </h2>
+      <p style="font-size: 14px; color: #6b7280; margin-bottom: 12px;">Copy and paste this into the editor to see grammar checking in action:</p>
+      <div style="background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; font-size: 14px; color: #374151; line-height: 1.7;">
+        He go to the store yesterday and buyed some foods. The team have been working hard on there project and they was able to finish it on time. Alot of people thinks that this is a good idea, but I dont think so. Me and him went to the meeting and discussed about the agenda.
+      </div>
+      <p style="font-size: 13px; color: #9ca3af; margin-top: 10px;">This text contains 10+ grammar issues that ProsePilot should catch.</p>
+    </div>
+
+    <!-- Report Issues -->
+    <div class="card">
+      <h2>
+        <span class="icon" style="background: #fee2e2; color: #dc2626;">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        </span>
+        Found a Bug?
+      </h2>
+      <p style="font-size: 14px; color: #6b7280;">If something doesn't work as expected, note down:</p>
+      <ul style="font-size: 14px; color: #6b7280; margin: 12px 0 0 20px; line-height: 2;">
+        <li>What you were doing when it broke</li>
+        <li>What you expected to happen</li>
+        <li>What actually happened</li>
+        <li>Any error message shown</li>
+      </ul>
+      <p style="font-size: 14px; color: #6b7280; margin-top: 12px;">Send feedback to: <a href="mailto:support@prosepilot.io" style="color: #6366f1;">support@prosepilot.io</a></p>
+    </div>
+
+    <div class="footer">
+      <p>ProsePilot — Your Writing Co-Pilot</p>
+      <p style="margin-top: 4px;">Built for professionals who write.</p>
+    </div>
+  </div>
+</body>
+</html>
