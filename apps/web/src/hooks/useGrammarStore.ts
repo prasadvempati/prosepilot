@@ -103,7 +103,6 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
       const data = await response.json();
       set({ issues: data.issues || [], isChecking: false, hasChecked: true, checkError: null });
     } catch (error: any) {
-      console.error("Grammar check error:", error);
       set({
         isChecking: false,
         hasChecked: true,
@@ -133,7 +132,6 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
       const data = await response.json();
       set({ rewriteResult: data.result, isRewriting: false, rewriteError: null });
     } catch (error: any) {
-      console.error("Rewrite error:", error);
       set({
         isRewriting: false,
         rewriteError: error.message || "Failed to rewrite. Please try again.",
@@ -192,6 +190,7 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
       text: previousText,
       history: history.slice(0, -1),
       issues: [],
+      hasChecked: false,
     });
   },
 }));

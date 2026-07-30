@@ -20,6 +20,10 @@ interface LTMatch {
 }
 
 async function callLanguageTool(text: string): Promise<GrammarIssue[]> {
+  // Skip if LanguageTool URL is not configured or points to localhost (not deployed on Railway)
+  if (!process.env.LANGUAGETOOL_URL || LANGUAGETOOL_URL === "http://localhost:8010") {
+    return [];
+  }
   try {
     const response = await fetch(`${LANGUAGETOOL_URL}/v2/check`, {
       method: "POST",

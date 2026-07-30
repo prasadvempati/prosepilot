@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { RewriteResult, ProtectedFact } from "@prosepilot/writing-core";
 
 interface RewritePanelProps {
@@ -5,9 +6,11 @@ interface RewritePanelProps {
   isRewriting: boolean;
   originalText: string;
   onReplace: (newText: string) => void;
+  error?: string | null;
 }
 
-export function RewritePanel({ result, isRewriting, onReplace }: RewritePanelProps) {
+export function RewritePanel({ result, isRewriting, onReplace, error }: RewritePanelProps) {
+  const [copied, setCopied] = useState(false);
   if (isRewriting) {
     return (
       <div className="card p-12 flex flex-col items-center justify-center text-center">
@@ -17,6 +20,20 @@ export function RewritePanel({ result, isRewriting, onReplace }: RewritePanelPro
         </div>
         <p className="text-sm text-ink-700 mt-6 font-semibold">Rewriting your text...</p>
         <p className="text-xs text-ink-400 mt-1">Adjusting tone and clarity</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="card p-12 flex flex-col items-center justify-center text-center">
+        <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-4">
+          <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <p className="text-ink-700 font-semibold mb-1">Rewrite failed</p>
+        <p className="text-ink-400 text-sm">{error}</p>
       </div>
     );
   }
@@ -35,8 +52,10 @@ export function RewritePanel({ result, isRewriting, onReplace }: RewritePanelPro
     );
   }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(result.rewritten);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(result.rewritten);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -90,10 +109,21 @@ export function RewritePanel({ result, isRewriting, onReplace }: RewritePanelPro
       {/* Actions */}
       <div className="px-5 py-4 border-t border-surface-200 bg-surface-0 flex gap-3">
         <button onClick={handleCopy} className="btn-secondary flex-1 flex items-center justify-center gap-2 text-sm">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
-          Copy
+          {copied ? (
+            <>
+              <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Copied!
+            </>
+          ) : (
+            <>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              Copy
+            </>
+          )}
         </button>
         <button onClick={() => onReplace(result.rewritten)} className="btn-glow flex-1 flex items-center justify-center gap-2 text-sm">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

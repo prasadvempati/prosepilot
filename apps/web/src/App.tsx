@@ -16,7 +16,7 @@ type Tab = "check" | "rewrite" | "document" | "voice";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("check");
-  const { issues, isChecking, hasChecked, checkError, text, setText, checkGrammar, rewriteText, rewriteResult, isRewriting } = useGrammarStore();
+  const { issues, isChecking, hasChecked, checkError, text, setText, checkGrammar, rewriteText, rewriteResult, isRewriting, rewriteError, tone, setTone } = useGrammarStore();
 
   return (
     <div className="min-h-screen bg-surface-50">
@@ -101,6 +101,8 @@ export default function App() {
                   isChecking={isChecking}
                   isRewriting={isRewriting}
                   mode={tab}
+                  tone={tone}
+                  onToneChange={setTone}
                 />
               </div>
             )}
@@ -121,6 +123,7 @@ export default function App() {
                   isRewriting={isRewriting}
                   originalText={text}
                   onReplace={(newText) => setText(newText)}
+                  error={rewriteError}
                 />
               ) : tab === "document" ? (
                 <DocumentChecker />

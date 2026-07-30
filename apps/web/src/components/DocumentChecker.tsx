@@ -67,8 +67,8 @@ export function DocumentChecker() {
       formData.append("file", file);
 
       const url = voiceProfileId
-        ? `https://prosepilot.io/v1/documents/check?voiceProfileId=${encodeURIComponent(voiceProfileId)}`
-        : "https://prosepilot.io/v1/documents/check";
+        ? `/v1/documents/check?voiceProfileId=${encodeURIComponent(voiceProfileId)}`
+        : "/v1/documents/check";
 
       const res = await fetch(url, {
         method: "POST",

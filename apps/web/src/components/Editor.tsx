@@ -8,6 +8,8 @@ interface EditorProps {
   isChecking: boolean;
   isRewriting: boolean;
   mode: "check" | "rewrite";
+  tone?: string;
+  onToneChange?: (tone: string) => void;
 }
 
 const TONES = [
@@ -25,7 +27,7 @@ const TONES = [
   { value: "firm", label: "Firm" },
 ];
 
-export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewriting, mode }: EditorProps) {
+export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewriting, mode, tone = "professional", onToneChange }: EditorProps) {
   const handlePaste = useCallback(async () => {
     try {
       const clipText = await navigator.clipboard.readText();
@@ -109,7 +111,11 @@ export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewri
           {/* Actions */}
           <div className="flex items-center gap-2">
             {mode === "rewrite" && (
-              <select className="input text-sm py-2 w-auto">
+              <select
+                value={tone}
+                onChange={(e) => onToneChange?.(e.target.value)}
+                className="input text-sm py-2 w-auto"
+              >
                 {TONES.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
