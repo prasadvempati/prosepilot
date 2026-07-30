@@ -120,6 +120,7 @@ export default function App() {
                   result={rewriteResult}
                   isRewriting={isRewriting}
                   originalText={text}
+                  onReplace={(newText) => setText(newText)}
                 />
               ) : tab === "document" ? (
                 <DocumentChecker />

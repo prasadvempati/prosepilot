@@ -4,9 +4,10 @@ interface RewritePanelProps {
   result: RewriteResult | null;
   isRewriting: boolean;
   originalText: string;
+  onReplace: (newText: string) => void;
 }
 
-export function RewritePanel({ result, isRewriting }: RewritePanelProps) {
+export function RewritePanel({ result, isRewriting, onReplace }: RewritePanelProps) {
   if (isRewriting) {
     return (
       <div className="card p-12 flex flex-col items-center justify-center text-center">
@@ -94,7 +95,7 @@ export function RewritePanel({ result, isRewriting }: RewritePanelProps) {
           </svg>
           Copy
         </button>
-        <button className="btn-glow flex-1 flex items-center justify-center gap-2 text-sm">
+        <button onClick={() => onReplace(result.rewritten)} className="btn-glow flex-1 flex items-center justify-center gap-2 text-sm">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
