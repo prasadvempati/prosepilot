@@ -12,7 +12,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "prosepilot-check") {
-    chrome.action.openPopup();
+    try { chrome.action.openPopup(); } catch(e) { /* Edge doesn't support openPopup */ }
   }
 });
 
