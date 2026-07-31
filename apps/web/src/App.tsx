@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Show, SignInButton, SignUpButton, useAuth } from "@clerk/react";
+import { SignInButton, SignUpButton, useAuth } from "@clerk/react";
 import { Editor } from "./components/Editor";
 import { SuggestionPanel } from "./components/SuggestionPanel";
 import { RewritePanel } from "./components/RewritePanel";
@@ -19,7 +19,7 @@ const EXTENSION_ID = import.meta.env.VITE_CHROME_EXTENSION_ID || "YOUR_EXTENSION
 type Tab = "check" | "rewrite" | "document" | "voice";
 
 export default function App() {
-  const { getToken } = useAuth();
+  const { getToken, isLoaded, isSignedIn } = useAuth();
 
   useEffect(() => {
     setTokenGetter(() => getToken());
@@ -71,7 +71,7 @@ export default function App() {
       <Header />
 
       {/* Editor - visible when signed in */}
-      <Show when="signed-in">
+      {isLoaded && isSignedIn && (
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Tab Switcher */}
           <div className="flex items-center gap-1 p-1 bg-surface-100 rounded-xl w-fit mb-6">
@@ -181,10 +181,10 @@ export default function App() {
             </div>
           </div>
         </main>
-      </Show>
+      )}
 
       {/* Landing page - visible when signed out */}
-      <Show when="signed-out">
+      {isLoaded && !isSignedIn && (
         <div className="relative overflow-hidden">
           {/* Hero */}
           <section className="relative pt-20 pb-32 px-4 sm:px-6 lg:px-8 bg-animated-gradient">
@@ -401,7 +401,7 @@ export default function App() {
             </div>
           </footer>
         </div>
-      </Show>
+      )}
     </div>
   );
 }
