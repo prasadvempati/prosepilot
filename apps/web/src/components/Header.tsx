@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/react";
+import { SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/react";
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isSignedIn } = useAuth();
 
   return (
     <header className="sticky top-0 z-50 glass border-b border-surface-200/50">
@@ -26,15 +27,17 @@ export function Header() {
 
           {/* Auth */}
           <div className="flex items-center gap-3">
-            <Show when="signed-out">
-              <SignInButton mode="modal">
-                <button className="btn-ghost text-sm hidden sm:block">Sign in</button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button className="btn-primary text-sm px-4 py-2">Get started free</button>
-              </SignUpButton>
-            </Show>
-            <Show when="signed-in">
+            {!isSignedIn && (
+              <>
+                <SignInButton mode="modal">
+                  <button className="btn-ghost text-sm hidden sm:block">Sign in</button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <button className="btn-primary text-sm px-4 py-2">Get started free</button>
+                </SignUpButton>
+              </>
+            )}
+            {isSignedIn && (
               <UserButton 
                 appearance={{
                   elements: {
@@ -42,7 +45,7 @@ export function Header() {
                   }
                 }}
               />
-            </Show>
+            )}
 
             {/* Mobile menu button */}
             <button
@@ -66,11 +69,11 @@ export function Header() {
             <div className="flex flex-col gap-2">
               <a href="#features" className="btn-ghost text-sm justify-start" onClick={() => setMobileMenuOpen(false)}>Features</a>
               <a href="#pricing" className="btn-ghost text-sm justify-start" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
-              <Show when="signed-out">
+              {!isSignedIn && (
                 <SignInButton mode="modal">
                   <button className="btn-ghost text-sm justify-start" onClick={() => setMobileMenuOpen(false)}>Sign in</button>
                 </SignInButton>
-              </Show>
+              )}
             </div>
           </div>
         )}

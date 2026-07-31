@@ -19,7 +19,7 @@ const EXTENSION_ID = import.meta.env.VITE_CHROME_EXTENSION_ID || "YOUR_EXTENSION
 type Tab = "check" | "rewrite" | "document" | "voice";
 
 export default function App() {
-  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const { getToken, isSignedIn } = useAuth();
 
   useEffect(() => {
     setTokenGetter(() => getToken());
@@ -71,7 +71,7 @@ export default function App() {
       <Header />
 
       {/* Editor - visible when signed in */}
-      {isLoaded && isSignedIn && (
+      {isSignedIn && (
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Tab Switcher */}
           <div className="flex items-center gap-1 p-1 bg-surface-100 rounded-xl w-fit mb-6">
@@ -183,8 +183,8 @@ export default function App() {
         </main>
       )}
 
-      {/* Landing page - visible when signed out */}
-      {isLoaded && !isSignedIn && (
+      {/* Landing page - visible when signed out (or Clerk hasn't loaded) */}
+      {!isSignedIn && (
         <div className="relative overflow-hidden">
           {/* Hero */}
           <section className="relative pt-20 pb-32 px-4 sm:px-6 lg:px-8 bg-animated-gradient">
