@@ -390,8 +390,7 @@ window.addEventListener("message", (event) => {
       el.selectionStart = Math.min(start, newText.length);
       el.selectionEnd = Math.min(end, newText.length);
     } else {
-      // For contentEditable: directly replace text nodes
-      // Collect all user text nodes (before signature separator)
+      // For contentEditable: save caret position, replace text, restore caret
       const textNodes = [];
       const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
       let node;
@@ -402,20 +401,44 @@ window.addEventListener("message", (event) => {
 
       if (textNodes.length === 0) return;
 
-      // Build the current user text from nodes
       let currentText = textNodes.map((n) => n.textContent).join("");
       if (currentText === newText) return;
+
+      // Save caret offset relative to user text
+      let savedOffset = currentText.length; // default: end of text
+      try {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          // Calculate offset from start of first text node
+          const firstNode = textNodes[0];
+          const startRange = document.createRange();
+          startRange.setStart(firstNode, 0);
+          startRange.setEnd(range.startContainer, range.startOffset);
+          savedOffset = startRange.toString().length;
+        }
+      } catch (e) { /* fallback to end */ }
 
       // Replace: put all new text in first node, clear the rest
       textNodes[0].textContent = newText;
       for (let i = 1; i < textNodes.length; i++) {
         textNodes[i].textContent = "";
       }
-
-      // Normalize to merge adjacent empty text nodes
       el.normalize();
 
-      // Dispatch input event for any listeners
+      // Restore caret — find the text node and offset in the new text
+      try {
+        const restored = findNodeAtOffset(el, Math.min(savedOffset, newText.length));
+        if (restored.node) {
+          const sel = window.getSelection();
+          const range = document.createRange();
+          range.setStart(restored.node, restored.offset);
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      } catch (e) { /* caret restore failed silently */ }
+
       el.dispatchEvent(new Event("input", { bubbles: true }));
     }
   }
@@ -967,7 +990,7 @@ window.addEventListener("message", (event) => {
     injectStyles();
     await loadMode();
     createFloatingIcon();
-    showIcon();
+    // Don't show icon until a text field is focused
 
     // Find and monitor existing editable elements
     findEditables().forEach(observeElement);
