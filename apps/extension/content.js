@@ -734,7 +734,16 @@ window.addEventListener("message", (event) => {
 
     // Handlers
     popup.querySelector(".prosepilot-close").addEventListener("click", hidePopup);
-    popup.querySelector(".prosepilot-skip").addEventListener("click", hidePopup);
+    popup.querySelector(".prosepilot-skip").addEventListener("click", () => {
+      // Remove the underline span when user skips/dismisses
+      const span = editableEl.querySelector(`.prosepilot-underline[data-issue-id="${issue.id}"]`);
+      if (span) {
+        const parent = span.parentNode;
+        parent.replaceChild(document.createTextNode(issue.original), span);
+        parent.normalize();
+      }
+      hidePopup();
+    });
     popup.querySelector(".prosepilot-accept").addEventListener("click", async () => {
       // Find the underline span for this issue and replace it directly
       const span = editableEl.querySelector(`.prosepilot-underline[data-issue-id="${issue.id}"]`);
