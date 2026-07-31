@@ -152,7 +152,6 @@ export async function checkRoutes(app: FastifyInstance) {
     }
 
     try {
-      const userId = (request as any).auth?.userId || "anonymous";
       const result = await validateFactsEndpoint(original, rewritten);
       return reply.send(result);
     } catch (error) {

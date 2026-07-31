@@ -120,7 +120,7 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
   const rules: Array<{ pattern: RegExp; replacement: string | ((match: string, ...groups: string[]) => string); category: GrammarIssue["category"]; rule: string; explanation: string }> = [
     // === CAPITALIZATION ===
     // Sentence starts with lowercase after period/exclamation/question
-    { pattern: /([.!?]\s+)([a-z])/g, replacement: (m, p1, p2) => p1 + p2.toUpperCase(), category: "grammar", rule: "capitalize_after_period", explanation: "Capitalize the first word of a new sentence." },
+    { pattern: /([.!?]\s+)([a-z])/g, replacement: (_m, p1, p2) => p1 + p2.toUpperCase(), category: "grammar", rule: "capitalize_after_period", explanation: "Capitalize the first word of a new sentence." },
     // Sentence start at beginning of text — capitalize first letter
     { pattern: /^([a-z])/, replacement: (_m: string, letter: string) => letter.toUpperCase(), category: "grammar", rule: "capitalize_sentence_start", explanation: "Capitalize the first word of a sentence." },
     // Product/brand names — Prosepilot → ProsePilot
@@ -144,7 +144,7 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     // Double spaces
     { pattern: /  +/g, replacement: " ", category: "style", rule: "double_space", explanation: "Remove extra spaces." },
     // Missing period at end of sentence
-    { pattern: /^([A-Z][^.!?}\n"]+)$/m, replacement: "$1.", category: "punctuation", rule: "missing_period", explanation: "Sentences should end with a period.", safeAuto: false },
+    { pattern: /^([A-Z][^.!?}\n"]+)$/m, replacement: "$1.", category: "punctuation", rule: "missing_period", explanation: "Sentences should end with a period." },
     // Double punctuation
     { pattern: /\.\./g, replacement: "...", category: "punctuation", rule: "double_period", explanation: "Use an ellipsis (...) not double periods." },
 

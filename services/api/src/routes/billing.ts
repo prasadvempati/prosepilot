@@ -93,7 +93,7 @@ export async function billingRoutes(app: FastifyInstance) {
             const [user] = await db.select().from(users).where(eq(users.clerkId, userId)).limit(1);
             if (user) {
               const [membership] = await db.select().from(memberships).where(eq(memberships.userId, user.id)).limit(1);
-              if (membership) {
+              if (membership?.organizationId) {
                 await db
                   .update(organizations)
                   .set({
