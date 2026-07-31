@@ -26,7 +26,7 @@ const STATS = [
   { value: "50,000+", label: "Issues fixed" },
   { value: "2,000+", label: "Documents checked" },
   { value: "4.8", label: "User rating", icon: "★" },
-  { value: "$5", label: "Per month" },
+  { value: "$7", label: "Per month" },
 ];
 
 export function SocialProof() {
