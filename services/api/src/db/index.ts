@@ -9,8 +9,9 @@ if (!connectionString) {
 }
 
 // Disable SSL for local development, enable for production
+const sslReject = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false";
 const client = postgres(connectionString, {
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: sslReject } : false,
 });
 
 export const db = drizzle(client, { schema });

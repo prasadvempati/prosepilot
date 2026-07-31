@@ -61,6 +61,7 @@ export const feedbackEvents = pgTable("feedback_events", {
 
 export const voiceProfiles = pgTable("voice_profiles", {
   id: uuid("id").primaryKey().defaultRandom(),
+  userId: varchar("user_id", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }).default("My Voice"),
   profileData: jsonb("profile_data").notNull(), // Full VoiceProfile stats (no raw text)
   sampleCount: integer("sample_count").default(0),

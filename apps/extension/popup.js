@@ -97,11 +97,19 @@ document.addEventListener("DOMContentLoaded", () => {
       status.className = "status ready";
       loading.style.display = "block";
 
+      const { clerkToken } = await chrome.storage.local.get("clerkToken");
+      const headers = { "Content-Type": "application/json" };
+      if (clerkToken) headers["Authorization"] = `Bearer ${clerkToken}`;
+
       const res = await fetch(`${API_BASE}/v1/check`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ text, mode: "review" }),
       });
+
+      if (!res.ok) {
+        throw new Error(`API error: ${res.status} ${res.statusText}`);
+      }
 
       const data = await res.json();
       loading.style.display = "none";
@@ -156,6 +164,14 @@ document.addEventListener("DOMContentLoaded", () => {
   settingsBtn.addEventListener("click", () => {
     chrome.tabs.create({ url: "https://prosepilot.io" });
   });
+
+  // Clerk sign-in: open web app auth page
+  const signInBtn = document.getElementById("signInBtn");
+  if (signInBtn) {
+    signInBtn.addEventListener("click", () => {
+      chrome.tabs.create({ url: "https://prosepilot.io/sign-in" });
+    });
+  }
 });
 
 function renderIssues() {

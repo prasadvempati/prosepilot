@@ -1,5 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import Stripe from "stripe";
+import { eq } from "drizzle-orm";
+import { verifyRequest } from "../middleware/auth.js";
+import { db } from "../db/index.js";
+import { organizations, users, memberships } from "../db/schema.js";
 
 let stripe: Stripe | null = null;
 const PRICE_ID = process.env.STRIPE_PRICE_PRO_MONTHLY || "";
@@ -13,7 +17,7 @@ function getStripe(): Stripe | null {
 
 export async function billingRoutes(app: FastifyInstance) {
   // Create Checkout Session
-  app.post("/v1/billing/checkout", async (req, reply) => {
+  app.post("/v1/billing/checkout", { preHandler: [verifyRequest] }, async (req, reply) => {
     const s = getStripe();
     if (!s) return reply.code(503).send({ error: "Billing not configured" });
 
@@ -41,7 +45,7 @@ export async function billingRoutes(app: FastifyInstance) {
   });
 
   // Create Billing Portal Session
-  app.post("/v1/billing/portal", async (req, reply) => {
+  app.post("/v1/billing/portal", { preHandler: [verifyRequest] }, async (req, reply) => {
     const s = getStripe();
     if (!s) return reply.code(503).send({ error: "Billing not configured" });
 
@@ -59,8 +63,8 @@ export async function billingRoutes(app: FastifyInstance) {
     }
   });
 
-  // Stripe Webhook
-  app.post("/v1/billing/webhook", async (req, reply) => {
+  // Stripe Webhook — rawBody must be preserved for signature verification
+  app.post("/v1/billing/webhook", { config: { rawBody: true } }, async (req, reply) => {
     const s = getStripe();
     if (!s) return reply.code(503).send({ error: "Billing not configured" });
 
@@ -71,7 +75,7 @@ export async function billingRoutes(app: FastifyInstance) {
 
     try {
       event = s.webhooks.constructEvent(
-        req.body as string,
+        req.rawBody as string,
         sig,
         endpointSecret
       );
@@ -82,7 +86,28 @@ export async function billingRoutes(app: FastifyInstance) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        console.log("Checkout completed:", session.id);
+        try {
+          const userId = session.metadata?.userId;
+          const stripeCustomerId = session.customer as string;
+          if (userId && stripeCustomerId) {
+            const [user] = await db.select().from(users).where(eq(users.clerkId, userId)).limit(1);
+            if (user) {
+              const [membership] = await db.select().from(memberships).where(eq(memberships.userId, user.id)).limit(1);
+              if (membership) {
+                await db
+                  .update(organizations)
+                  .set({
+                    stripeCustomerId,
+                    stripeSubscriptionId: session.subscription as string,
+                    plan: "pro",
+                  })
+                  .where(eq(organizations.id, membership.organizationId));
+              }
+            }
+          }
+        } catch (err) {
+          console.error("checkout.session.completed processing failed:", err);
+        }
         break;
       }
       case "invoice.paid": {
@@ -92,12 +117,42 @@ export async function billingRoutes(app: FastifyInstance) {
       }
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
-        console.log("Subscription updated:", subscription.id);
+        try {
+          const [org] = await db
+            .select()
+            .from(organizations)
+            .where(eq(organizations.stripeSubscriptionId, subscription.id))
+            .limit(1);
+          if (org) {
+            const plan =
+              subscription.status === "active" ? "pro" : "free";
+            await db
+              .update(organizations)
+              .set({ plan })
+              .where(eq(organizations.id, org.id));
+          }
+        } catch (err) {
+          console.error("customer.subscription.updated processing failed:", err);
+        }
         break;
       }
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
-        console.log("Subscription cancelled:", subscription.id);
+        try {
+          const [org] = await db
+            .select()
+            .from(organizations)
+            .where(eq(organizations.stripeSubscriptionId, subscription.id))
+            .limit(1);
+          if (org) {
+            await db
+              .update(organizations)
+              .set({ plan: "free", stripeSubscriptionId: null })
+              .where(eq(organizations.id, org.id));
+          }
+        } catch (err) {
+          console.error("customer.subscription.deleted processing failed:", err);
+        }
         break;
       }
       default:

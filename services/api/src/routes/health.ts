@@ -6,7 +6,7 @@ export async function healthRoutes(app: FastifyInstance) {
   });
 
   app.get("/health/ready", async () => {
-    // TODO: Check database connectivity, Redis, DeepSeek API
+    // TODO: Check database connectivity, DeepSeek API
     return { status: "ok", timestamp: new Date().toISOString() };
   });
 }

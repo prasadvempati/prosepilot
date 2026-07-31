@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useAuth } from "@clerk/react";
 import { useGrammarStore } from "../hooks/useGrammarStore";
 
 interface VoiceProfileData {
@@ -18,6 +19,7 @@ interface ProfileSummary {
 }
 
 export function VoiceProfilePanel() {
+  const { getToken } = useAuth();
   const [profile, setProfile] = useState<ProfileSummary | null>(null);
   const [sampleText, setSampleText] = useState("");
   const [profileName, setProfileName] = useState("My Voice");
@@ -28,15 +30,20 @@ export function VoiceProfilePanel() {
 
   // Load existing profile on mount
   useEffect(() => {
-    fetch("/v1/voice-profile")
-      .then(r => r.json())
-      .then(data => {
+    (async () => {
+      try {
+        const headers: Record<string, string> = {};
+        const token = await getToken();
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const r = await fetch("/v1/voice-profile", { headers });
+        const data = await r.json();
         if (data.profile) {
           setProfile(data);
           setVoiceProfileId(data.profile.id);
         }
-      })
-      .catch(() => {});
+      } catch {}
+    })();
   }, []);
 
   const handleSubmit = async () => {
@@ -49,9 +56,13 @@ export function VoiceProfilePanel() {
     setMessage(null);
 
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const token = await getToken();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch("/v1/voice-profile", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           text: sampleText,
           name: profileName,
@@ -72,7 +83,11 @@ export function VoiceProfilePanel() {
 
   const handleReset = async () => {
     try {
-      await fetch("/v1/voice-profile", { method: "DELETE" });
+      const headers: Record<string, string> = {};
+      const token = await getToken();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      await fetch("/v1/voice-profile", { method: "DELETE", headers });
       setProfile(null);
       setVoiceProfileId(null);
       setMessage("Voice profile deleted");

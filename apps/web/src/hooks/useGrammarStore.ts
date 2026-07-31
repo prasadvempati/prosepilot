@@ -3,6 +3,21 @@ import type { GrammarIssue, RewriteResult } from "@prosepilot/writing-core";
 
 const API_BASE = "";
 
+let tokenGetter: (() => Promise<string | null>) | null = null;
+
+export function setTokenGetter(getter: () => Promise<string | null>) {
+  tokenGetter = getter;
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (tokenGetter) {
+    const token = await tokenGetter();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 interface GrammarStore {
   text: string;
   setText: (text: string) => void;
@@ -89,9 +104,10 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
     set({ isChecking: true, issues: [], checkError: null, hasChecked: false });
 
     try {
+      const headers = await authHeaders();
       const response = await fetch(`${API_BASE}/v1/check`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ text, mode: "review", voiceProfileId }),
       });
 
@@ -118,9 +134,10 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
     set({ isRewriting: true, rewriteResult: null, rewriteError: null });
 
     try {
+      const headers = await authHeaders();
       const response = await fetch(`${API_BASE}/v1/rewrite`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ text, tone }),
       });
 

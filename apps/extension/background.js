@@ -17,6 +17,20 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "setClerkToken") {
+    chrome.storage.local.set({ clerkToken: message.token }, () => {
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
+  if (message.action === "getClerkToken") {
+    chrome.storage.local.get("clerkToken", (data) => {
+      sendResponse({ clerkToken: data.clerkToken || null });
+    });
+    return true;
+  }
+
   if (message.action === "getSelection") {
     handleGetSelection(sendResponse);
     return true;
@@ -172,26 +186,41 @@ async function handleCheckInline(text, sendResponse) {
       return;
     }
 
-    const response = await fetch(`${API_BASE}/v1/check`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, mode: "review" }),
-      signal: AbortSignal.timeout(10000),
-    });
+    // Try ProsePilot API first
+    let issues = [];
+    try {
+      const { clerkToken } = await chrome.storage.local.get("clerkToken");
+      const headers = { "Content-Type": "application/json" };
+      if (clerkToken) headers["Authorization"] = `Bearer ${clerkToken}`;
 
-    if (!response.ok) {
-      sendResponse({ issues: [] });
-      return;
+      const response = await fetch(`${API_BASE}/v1/check`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ text, mode: "review" }),
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        issues = (data.issues || []).map((i) => ({
+          id: i.id,
+          category: i.category,
+          original: i.original,
+          replacement: i.replacement,
+          explanation: i.explanation,
+          startUtf16: i.startUtf16 ?? i.start ?? null,
+          confidence: i.confidence ?? 0.85,
+          safeAuto: i.safeAuto ?? ((i.category === "spelling" || i.category === "grammar") && (i.confidence ?? 0.85) >= 0.85),
+        }));
+      }
+    } catch (e) {
+      // ProsePilot API unavailable — fall through to LanguageTool
     }
 
-    const data = await response.json();
-    const issues = (data.issues || []).map((i) => ({
-      id: i.id,
-      category: i.category,
-      original: i.original,
-      replacement: i.replacement,
-      explanation: i.explanation,
-    }));
+    // Fallback: LanguageTool public API (free, no key needed)
+    if (issues.length === 0) {
+      issues = await checkWithLanguageTool(text);
+    }
 
     // Cache for 60 seconds
     inlineCache.set(cacheKey, issues);
@@ -201,6 +230,55 @@ async function handleCheckInline(text, sendResponse) {
   } catch (err) {
     sendResponse({ issues: [] });
   }
+}
+
+async function checkWithLanguageTool(text) {
+  try {
+    const params = new URLSearchParams();
+    params.append("text", text);
+    params.append("language", "en-US");
+    params.append("enabledOnly", "false");
+
+    const response = await fetch("https://api.languagetool.org/v2/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    return (data.matches || []).map((match) => {
+      const category = mapLTCategory(match.rule?.category?.id || "");
+      const confidence = match.replacements?.length > 0 ? 0.95 : 0.7;
+      const replacement = match.replacements?.[0]?.value || text.slice(match.offset, match.offset + match.length);
+
+      return {
+        id: `lt_${match.rule?.id || "unknown"}`,
+        category,
+        original: text.slice(match.offset, match.offset + match.length),
+        replacement,
+        explanation: match.message || "Grammar issue detected",
+        startUtf16: match.offset,
+        confidence,
+        safeAuto: confidence >= 0.85 && (category === "spelling" || category === "grammar") && match.replacements?.length <= 2,
+      };
+    });
+  } catch (e) {
+    return [];
+  }
+}
+
+function mapLTCategory(categoryId) {
+  if (!categoryId) return "grammar";
+  const id = categoryId.toUpperCase();
+  if (id.includes("SPELL") || id.includes("TYPO")) return "spelling";
+  if (id.includes("GRAMMAR")) return "grammar";
+  if (id.includes("PUNCT")) return "punctuation";
+  if (id.includes("STYLE")) return "style";
+  if (id.includes("CASING")) return "spelling";
+  return "grammar";
 }
 
 // --- Inject content script on demand (no host_permissions needed) ---

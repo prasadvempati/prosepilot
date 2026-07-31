@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Show, SignInButton, SignUpButton } from "@clerk/react";
+import { useState, useEffect } from "react";
+import { Show, SignInButton, SignUpButton, useAuth } from "@clerk/react";
 import { Editor } from "./components/Editor";
 import { SuggestionPanel } from "./components/SuggestionPanel";
 import { RewritePanel } from "./components/RewritePanel";
@@ -10,11 +10,59 @@ import { Pricing } from "./components/Pricing";
 import { HeroDemo } from "./components/HeroDemo";
 import { HowItWorks } from "./components/HowItWorks";
 import { SocialProof } from "./components/SocialProof";
-import { useGrammarStore } from "./hooks/useGrammarStore";
+import { useGrammarStore, setTokenGetter } from "./hooks/useGrammarStore";
+
+// Chrome extension ID for externally_connectable messaging.
+// Replace with the published extension's ID (found in chrome://extensions when developer mode is on).
+const EXTENSION_ID = import.meta.env.VITE_CHROME_EXTENSION_ID || "YOUR_EXTENSION_ID_HERE";
 
 type Tab = "check" | "rewrite" | "document" | "voice";
 
 export default function App() {
+  const { getToken } = useAuth();
+
+  useEffect(() => {
+    setTokenGetter(() => getToken());
+  }, [getToken]);
+
+  // Push Clerk token to the Chrome extension so it can authenticate API calls.
+  // Uses two channels for broad compatibility:
+  //   1. chrome.runtime.sendMessage via externally_connectable (preferred)
+  //   2. window.postMessage fallback (works even without externally_connectable)
+  useEffect(() => {
+    if (!getToken) return;
+
+    let cancelled = false;
+
+    const pushToken = async () => {
+      try {
+        const token = await getToken();
+        if (cancelled || !token) return;
+
+        // Method 1: externally_connectable (requires the web origin in manifest's matches)
+        if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
+          chrome.runtime.sendMessage(EXTENSION_ID, {
+            action: "setClerkToken",
+            token,
+          }).catch(() => { /* extension not installed or ID mismatch — fallback below */ });
+        }
+
+        // Method 2: postMessage (picked up by content.js listener)
+        window.postMessage({ type: "CLERK_TOKEN_HANDOFF", token }, "https://prosepilot.io");
+      } catch {
+        // getToken failed (user signed out mid-flight) — silent
+      }
+    };
+
+    pushToken();
+    // Clerk JWTs live ~60 s; refresh at 50 s to avoid edge expiry
+    const interval = setInterval(pushToken, 50_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [getToken]);
   const [tab, setTab] = useState<Tab>("check");
   const { issues, isChecking, hasChecked, checkError, text, setText, checkGrammar, rewriteText, rewriteResult, isRewriting, rewriteError, tone, setTone } = useGrammarStore();
 
@@ -305,7 +353,7 @@ export default function App() {
                   <div>
                     <h2 className="text-2xl font-bold text-ink-900 mb-3">Your writing stays yours</h2>
                     <p className="text-ink-500 leading-relaxed mb-5 max-xl">
-                      ProsePilot never uses your text to train AI models. Your documents, emails, and drafts are processed in real-time and discarded immediately. We don't store, sell, or share your writing with anyone.
+                      ProsePilot never uses your text to train AI models. Your writing is sent to our grammar engine for real-time checking and never stored. If you enable Voice Profile, we store statistical patterns about your style — not your text — to personalize future checks.
                     </p>
                     <div className="flex flex-wrap gap-3">
                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
@@ -313,12 +361,6 @@ export default function App() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                         No data training
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        No text storage
                       </span>
                       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

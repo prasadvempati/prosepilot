@@ -1,28 +1,60 @@
 import type { FastifyInstance } from "fastify";
+import { db } from "../db/index.js";
+import { users, usageEvents } from "../db/schema.js";
+import { eq, sql } from "drizzle-orm";
+import { verifyRequest } from "../middleware/auth.js";
 
-// Simple usage tracking middleware - returns today's usage for the user
+const DEFAULT_CHARACTERS_LIMIT = 100_000;
+const DEFAULT_REQUESTS_LIMIT = 1_000;
+const BILLING_PERIOD_DAYS = 30;
+
 export async function usageRoutes(app: FastifyInstance) {
-  // GET /v1/usage - Current quota and usage
-  app.get("/v1/usage", async () => {
-    // TODO: Get actual user from auth middleware
-    // For now, return demo usage
+  app.get("/v1/usage", { preHandler: [verifyRequest] }, async (request, reply) => {
+    const clerkId = request.auth?.userId;
+    if (!clerkId) {
+      return reply.status(401).send({ error: "UNAUTHORIZED", message: "User not authenticated" });
+    }
+
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.clerkId, clerkId))
+      .limit(1);
+
+    const userId = user?.id;
+
+    const periodStart = new Date();
+    periodStart.setDate(periodStart.getDate() - BILLING_PERIOD_DAYS);
+
+    const events = userId
+      ? await db
+          .select({
+            feature: usageEvents.feature,
+            characterCount: usageEvents.characterCount,
+          })
+          .from(usageEvents)
+          .where(
+            sql`${usageEvents.actorId} = ${userId} AND ${usageEvents.createdAt} >= ${periodStart}`
+          )
+      : [];
+
+    let charactersUsed = 0;
+    let requestsUsed = 0;
+
+    for (const event of events) {
+      charactersUsed += event.characterCount;
+      requestsUsed += 1;
+    }
+
+    const resetDate = new Date();
+    resetDate.setDate(resetDate.getDate() + BILLING_PERIOD_DAYS);
+
     return {
-      plan: "free",
-      daily: {
-        checksUsed: 0,
-        checksLimit: 50,
-        rewritesUsed: 0,
-        rewritesLimit: 3,
-        charactersUsed: 0,
-        charactersLimit: 50000,
-      },
-      monthly: {
-        checksUsed: 0,
-        checksLimit: 1500,
-        charactersUsed: 0,
-        charactersLimit: 1500000,
-      },
-      resetAt: new Date(new Date().setHours(24, 0, 0, 0)).toISOString(),
+      charactersUsed,
+      charactersLimit: DEFAULT_CHARACTERS_LIMIT,
+      requestsUsed,
+      requestsLimit: DEFAULT_REQUESTS_LIMIT,
+      resetDate: resetDate.toISOString(),
     };
   });
 }

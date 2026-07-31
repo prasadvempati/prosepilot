@@ -120,7 +120,7 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
   const rules: Array<{ pattern: RegExp; replacement: string | ((match: string, ...groups: string[]) => string); category: GrammarIssue["category"]; rule: string; explanation: string }> = [
     // === CAPITALIZATION ===
     // Sentence starts with lowercase after period/exclamation/question
-    { pattern: /([.!?]\s+)([a-z])/g, replacement: "$1$2", category: "grammar", rule: "capitalize_after_period", explanation: "Capitalize the first word of a new sentence." },
+    { pattern: /([.!?]\s+)([a-z])/g, replacement: (m, p1, p2) => p1 + p2.toUpperCase(), category: "grammar", rule: "capitalize_after_period", explanation: "Capitalize the first word of a new sentence." },
     // Sentence start at beginning of text — capitalize first letter
     { pattern: /^([a-z])/, replacement: (_m: string, letter: string) => letter.toUpperCase(), category: "grammar", rule: "capitalize_sentence_start", explanation: "Capitalize the first word of a sentence." },
     // Product/brand names — Prosepilot → ProsePilot
@@ -144,7 +144,7 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     // Double spaces
     { pattern: /  +/g, replacement: " ", category: "style", rule: "double_space", explanation: "Remove extra spaces." },
     // Missing period at end of sentence
-    { pattern: /^([^.!?}\n"]+)$/m, replacement: "$1.", category: "punctuation", rule: "missing_period", explanation: "Sentences should end with a period." },
+    { pattern: /^([A-Z][^.!?}\n"]+)$/m, replacement: "$1.", category: "punctuation", rule: "missing_period", explanation: "Sentences should end with a period.", safeAuto: false },
     // Double punctuation
     { pattern: /\.\./g, replacement: "...", category: "punctuation", rule: "double_period", explanation: "Use an ellipsis (...) not double periods." },
 
@@ -424,28 +424,23 @@ Return ONLY the JSON array, no other text.`;
 function mergeAllIssues(ruleIssues: GrammarIssue[], ltIssues: GrammarIssue[], aiIssues: GrammarIssue[]): GrammarIssue[] {
   // Start with rule-based issues (highest priority — always correct)
   const merged = [...ruleIssues];
-  const usedTexts = new Set(ruleIssues.map((i) => i.original.toLowerCase()));
   const usedPositions = new Set(ruleIssues.map((i) => `${i.startUtf16}-${i.endUtf16}`));
 
   // Add LT issues that don't overlap with rule-based
   for (const ltIssue of ltIssues) {
     const posKey = `${ltIssue.startUtf16}-${ltIssue.endUtf16}`;
-    const textKey = ltIssue.original.toLowerCase();
-    if (!usedPositions.has(posKey) && !usedTexts.has(textKey)) {
+    if (!usedPositions.has(posKey)) {
       merged.push(ltIssue);
       usedPositions.add(posKey);
-      usedTexts.add(textKey);
     }
   }
 
   // Add AI issues that don't overlap with any existing issue
   for (const aiIssue of aiIssues) {
     const posKey = `${aiIssue.startUtf16}-${aiIssue.endUtf16}`;
-    const textKey = aiIssue.original.toLowerCase();
-    if (!usedPositions.has(posKey) && !usedTexts.has(textKey)) {
+    if (!usedPositions.has(posKey)) {
       merged.push(aiIssue);
       usedPositions.add(posKey);
-      usedTexts.add(textKey);
     }
   }
 

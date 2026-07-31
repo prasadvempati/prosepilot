@@ -4,52 +4,61 @@ import { createEmptyProfile, analyzeText, mergeAnalyses, getProfileSummary } fro
 import { db } from "../db/index.js";
 import { voiceProfiles } from "../db/schema.js";
 import { eq } from "drizzle-orm";
+import { verifyRequest } from "../middleware/auth.js";
 
-// Single profile — cached in memory, persisted to PostgreSQL
-const LOCAL_PROFILE_ID = "00000000-0000-0000-0000-000000000001";
-let localProfile: VoiceProfile | null = null;
-let dbLoaded = false;
+// Per-user profile cache — keyed by userId
+const profileCache = new Map<string, { profile: VoiceProfile | null; loaded: boolean }>();
 
-// Load profile from database on first access
-async function ensureLoaded(): Promise<void> {
-  if (dbLoaded) return;
+function getCacheEntry(userId: string) {
+  let entry = profileCache.get(userId);
+  if (!entry) {
+    entry = { profile: null, loaded: false };
+    profileCache.set(userId, entry);
+  }
+  return entry;
+}
+
+// Load profile from database for a specific user
+async function ensureLoaded(userId: string): Promise<void> {
+  const entry = getCacheEntry(userId);
+  if (entry.loaded) return;
   try {
-    const rows = await db.select().from(voiceProfiles).where(eq(voiceProfiles.id, LOCAL_PROFILE_ID)).limit(1);
+    const rows = await db.select().from(voiceProfiles).where(eq(voiceProfiles.userId, userId)).limit(1);
     if (rows.length > 0) {
-      localProfile = rows[0].profileData as unknown as VoiceProfile;
-      localProfile!.id = rows[0].id;
-      localProfile!.sampleCount = rows[0].sampleCount ?? 0;
+      entry.profile = rows[0].profileData as unknown as VoiceProfile;
+      entry.profile!.id = rows[0].id;
+      entry.profile!.sampleCount = rows[0].sampleCount ?? 0;
     }
   } catch {
     // Table may not exist yet — fall through to in-memory
   }
-  dbLoaded = true;
+  entry.loaded = true;
 }
 
 // Export for use by other routes (grammar check, document check)
-export async function getProfile(): Promise<VoiceProfile | undefined> {
-  await ensureLoaded();
-  return localProfile ?? undefined;
+export async function getProfile(userId: string): Promise<VoiceProfile | undefined> {
+  await ensureLoaded(userId);
+  return getCacheEntry(userId).profile ?? undefined;
 }
 
 // Sync version for backwards compatibility — returns cached value only
-export function getProfileSync(): VoiceProfile | undefined {
-  return localProfile ?? undefined;
+export function getProfileSync(userId: string): VoiceProfile | undefined {
+  return getCacheEntry(userId).profile ?? undefined;
 }
 
-async function saveProfile(profile: VoiceProfile): Promise<void> {
+async function saveProfile(userId: string, profile: VoiceProfile): Promise<void> {
   try {
-    const existing = await db.select().from(voiceProfiles).where(eq(voiceProfiles.id, LOCAL_PROFILE_ID)).limit(1);
+    const existing = await db.select().from(voiceProfiles).where(eq(voiceProfiles.userId, userId)).limit(1);
     if (existing.length > 0) {
       await db.update(voiceProfiles).set({
         profileData: profile as any,
         sampleCount: profile.sampleCount,
         name: profile.name,
         updatedAt: new Date(),
-      }).where(eq(voiceProfiles.id, LOCAL_PROFILE_ID));
+      }).where(eq(voiceProfiles.userId, userId));
     } else {
       await db.insert(voiceProfiles).values({
-        id: LOCAL_PROFILE_ID as any,
+        userId,
         name: profile.name,
         profileData: profile as any,
         sampleCount: profile.sampleCount,
@@ -62,20 +71,23 @@ async function saveProfile(profile: VoiceProfile): Promise<void> {
 
 export async function voiceProfileRoutes(app: FastifyInstance) {
   // GET /v1/voice-profile — Get voice profile
-  app.get("/v1/voice-profile", async (_request, reply) => {
-    await ensureLoaded();
-    if (!localProfile) {
+  app.get("/v1/voice-profile", { preHandler: [verifyRequest] }, async (request, reply) => {
+    const userId = (request as any).auth?.userId || "anonymous";
+    await ensureLoaded(userId);
+    const profile = getCacheEntry(userId).profile;
+    if (!profile) {
       return reply.send({ profile: null, summary: null });
     }
 
     return reply.send({
-      profile: localProfile,
-      summary: getProfileSummary(localProfile),
+      profile,
+      summary: getProfileSummary(profile),
     });
   });
 
   // POST /v1/voice-profile — Create or update voice profile from text samples
-  app.post("/v1/voice-profile", async (request, reply) => {
+  app.post("/v1/voice-profile", { preHandler: [verifyRequest] }, async (request, reply) => {
+    const userId = (request as any).auth?.userId || "anonymous";
     const { text, name } = request.body as {
       text: string;
       name?: string;
@@ -88,40 +100,41 @@ export async function voiceProfileRoutes(app: FastifyInstance) {
       });
     }
 
-    await ensureLoaded();
+    await ensureLoaded(userId);
+    const entry = getCacheEntry(userId);
 
     // Get existing profile or create new one
-    if (!localProfile) {
-      localProfile = createEmptyProfile(LOCAL_PROFILE_ID, name || "My Voice");
+    if (!entry.profile) {
+      entry.profile = createEmptyProfile(userId, name || "My Voice");
     }
 
     // Analyze the new text
     const analysis = analyzeText(text);
 
     // Merge with existing profile
-    const merged = mergeAnalyses(localProfile, analysis, localProfile.sampleCount);
+    const merged = mergeAnalyses(entry.profile, analysis, entry.profile.sampleCount);
 
     // Update profile
-    localProfile = {
-      ...localProfile,
+    entry.profile = {
+      ...entry.profile,
       ...merged,
-      sampleCount: localProfile.sampleCount + 1,
+      sampleCount: entry.profile.sampleCount + 1,
       updatedAt: new Date().toISOString(),
       ...(name ? { name } : {}),
     };
 
     // Persist to database
-    await saveProfile(localProfile);
+    await saveProfile(userId, entry.profile);
 
     return reply.send({
-      profile: localProfile,
-      summary: getProfileSummary(localProfile),
-      message: `Voice profile updated from ${localProfile.sampleCount} sample(s)`,
+      profile: entry.profile,
+      summary: getProfileSummary(entry.profile),
+      message: `Voice profile updated from ${entry.profile.sampleCount} sample(s)`,
     });
   });
 
   // POST /v1/voice-profile/analyze — Analyze text without saving (preview)
-  app.post("/v1/voice-profile/analyze", async (request, reply) => {
+  app.post("/v1/voice-profile/analyze", { preHandler: [verifyRequest] }, async (request, reply) => {
     const { text } = request.body as { text: string };
 
     if (!text || text.trim().length < 20) {
@@ -136,10 +149,11 @@ export async function voiceProfileRoutes(app: FastifyInstance) {
   });
 
   // DELETE /v1/voice-profile — Reset voice profile
-  app.delete("/v1/voice-profile", async (_request, reply) => {
-    localProfile = null;
+  app.delete("/v1/voice-profile", { preHandler: [verifyRequest] }, async (request, reply) => {
+    const userId = (request as any).auth?.userId || "anonymous";
+    profileCache.delete(userId);
     try {
-      await db.delete(voiceProfiles).where(eq(voiceProfiles.id, LOCAL_PROFILE_ID));
+      await db.delete(voiceProfiles).where(eq(voiceProfiles.userId, userId));
     } catch {
       // Ignore — profile cleared from memory
     }

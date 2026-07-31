@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useAuth } from "@clerk/react";
 import { useGrammarStore } from "../hooks/useGrammarStore";
 
 interface DocxIssue {
@@ -27,6 +28,7 @@ interface DocxResult {
 }
 
 export function DocumentChecker() {
+  const { getToken } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<DocxResult | null>(null);
@@ -34,6 +36,7 @@ export function DocumentChecker() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const voiceProfileId = useGrammarStore((s) => s.voiceProfileId);
   const [isDragging, setIsDragging] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const handleFile = (f: File) => {
     if (!f.name.endsWith(".docx")) {
@@ -70,8 +73,13 @@ export function DocumentChecker() {
         ? `/v1/documents/check?voiceProfileId=${encodeURIComponent(voiceProfileId)}`
         : "/v1/documents/check";
 
+      const headers: Record<string, string> = {};
+      const token = await getToken();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch(url, {
         method: "POST",
+        headers,
         body: formData,
       });
 
@@ -92,6 +100,41 @@ export function DocumentChecker() {
   const downloadUrl = (type: "clean" | "tracked") => {
     if (!result) return "#";
     return `https://prosepilot.io${result.downloads[type]}`;
+  };
+
+  const handleDownload = async (type: "clean" | "tracked") => {
+    setError(null);
+    setIsDownloading(true);
+    try {
+      const token = await getToken();
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(downloadUrl(type), { headers });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || `Download failed (${res.status} ${res.statusText})`);
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const filenameMatch = disposition.match(/filename="?([^";\n]+)"?/);
+      const filename = filenameMatch?.[1]
+        || (type === "tracked" ? "ProsePilot_TrackedChanges.docx" : "ProsePilot_Fixed.docx");
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const categoryColor = (cat: string) => {
@@ -258,24 +301,50 @@ export function DocumentChecker() {
 
           {/* Download buttons */}
           <div className="flex gap-3">
-            <a
-              href={downloadUrl("clean")}
-              className="flex-1 btn-primary py-3 text-center flex items-center justify-center gap-2"
+            <button
+              onClick={() => handleDownload("clean")}
+              disabled={isDownloading}
+              className="flex-1 btn-primary py-3 flex items-center justify-center gap-2"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Download Fixed (.docx)
-            </a>
-            <a
-              href={downloadUrl("tracked")}
-              className="flex-1 btn-secondary py-3 text-center flex items-center justify-center gap-2"
+              {isDownloading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Downloading...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m 0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download Fixed (.docx)
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => handleDownload("tracked")}
+              disabled={isDownloading}
+              className="flex-1 btn-secondary py-3 flex items-center justify-center gap-2"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Download with Track Changes
-            </a>
+              {isDownloading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Downloading...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m 0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download with Track Changes
+                </>
+              )}
+            </button>
           </div>
 
           {/* Reset */}

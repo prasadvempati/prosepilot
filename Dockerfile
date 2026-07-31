@@ -14,7 +14,8 @@ RUN echo 'enable-pre-post-scripts=true' > .npmrc && pnpm install --frozen-lockfi
 
 COPY . .
 
-ENV VITE_CLERK_PUBLISHABLE_KEY=pk_test_c3VwcmVtZS1ob3JzZS0yMC5jbGVyay5hY2NvdW50cy5kZXYk
+ARG VITE_CLERK_PUBLISHABLE_KEY
+ENV VITE_CLERK_PUBLISHABLE_KEY=${VITE_CLERK_PUBLISHABLE_KEY}
 ENV PORT=8080
 
 RUN pnpm turbo build

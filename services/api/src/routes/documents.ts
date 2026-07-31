@@ -2,12 +2,38 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "crypto";
 import { processDocx } from "../engine/docx.js";
 import { getProfile } from "./voice-profile.js";
+import { verifyRequest } from "../middleware/auth.js";
+
+interface DocxSession {
+  userId: string;
+  clean: Buffer;
+  tracked: Buffer;
+  created: number;
+}
+
+const docxSessions = new Map<string, DocxSession>();
+const DOCX_SESSION_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_DOCX_SESSIONS = 50;
+
+function cleanupDocxSessions() {
+  const cutoff = Date.now() - DOCX_SESSION_TTL;
+  for (const [key, session] of docxSessions) {
+    if (session.created < cutoff) docxSessions.delete(key);
+  }
+  if (docxSessions.size > MAX_DOCX_SESSIONS) {
+    const oldest = [...docxSessions.entries()]
+      .sort((a, b) => a[1].created - b[1].created)
+      .slice(0, docxSessions.size - MAX_DOCX_SESSIONS);
+    for (const [key] of oldest) docxSessions.delete(key);
+  }
+}
 
 export async function documentRoutes(app: FastifyInstance) {
   // POST /v1/documents/check — Upload .docx, get grammar report + processed files
-  app.post("/v1/documents/check", async (request, reply) => {
+  app.post("/v1/documents/check", { preHandler: [verifyRequest] }, async (request, reply) => {
     try {
-      const voiceProfile = await getProfile();
+      const userId = (request as any).auth?.userId || "anonymous";
+      const voiceProfile = await getProfile(userId);
 
       const data = await request.file();
       if (!data) {
@@ -47,21 +73,14 @@ export async function documentRoutes(app: FastifyInstance) {
       }
 
       // Store buffers temporarily with random session ID (not predictable)
+      cleanupDocxSessions();
       const sessionId = randomUUID();
-      (global as any).__docxSessions = (global as any).__docxSessions || {};
-      (global as any).__docxSessions[sessionId] = {
+      docxSessions.set(sessionId, {
+        userId: request.auth.userId,
         clean: result.cleanBuffer,
         tracked: result.trackedBuffer,
         created: Date.now(),
-      };
-
-      // Clean up sessions older than 5 minutes
-      const cutoff = Date.now() - 5 * 60 * 1000;
-      for (const [key, session] of Object.entries((global as any).__docxSessions)) {
-        if ((session as any).created < cutoff) {
-          delete (global as any).__docxSessions[key];
-        }
-      }
+      });
 
       return reply.send({
         sessionId,
@@ -81,19 +100,25 @@ export async function documentRoutes(app: FastifyInstance) {
   });
 
   // GET /v1/documents/download/:sessionId/:type — Download processed .docx
-  app.get("/v1/documents/download/:sessionId/:type", async (request, reply) => {
+  app.get("/v1/documents/download/:sessionId/:type", { preHandler: [verifyRequest] }, async (request, reply) => {
     const { sessionId, type } = request.params as {
       sessionId: string;
       type: string;
     };
 
-    const sessions = (global as any).__docxSessions || {};
-    const session = sessions[sessionId];
+    const session = docxSessions.get(sessionId);
 
     if (!session) {
       return reply.status(404).send({
         error: "SESSION_EXPIRED",
         message: "Download session not found or expired. Please upload again.",
+      });
+    }
+
+    if (session.userId !== request.auth.userId) {
+      return reply.status(403).send({
+        error: "FORBIDDEN",
+        message: "You do not have access to this document.",
       });
     }
 
@@ -111,7 +136,7 @@ export async function documentRoutes(app: FastifyInstance) {
     reply.header("Content-Disposition", `attachment; filename="${filename}"`);
 
     // Clean up this session after download
-    delete (global as any).__docxSessions[sessionId];
+    docxSessions.delete(sessionId);
 
     return reply.send(buffer);
   });
