@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+            xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:type="TaskPaneApp">
+  <Id>mnpmjdacolkglhmmbelekiohpbagcgbn</Id>
+  <Version>1.0.0</Version>
+  <ProviderName>ProsePilot</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="ProsePilot"/>
+  <Description DefaultValue="AI-powered grammar checker for Microsoft Word. Fix grammar, spelling, and style instantly."/>
+  <IconUrl DefaultValue="https://prosepilot.io/favicon.svg"/>
+  <HighResolutionIconUrl DefaultValue="https://prosepilot.io/icons/icon128.png"/>
+  <AppDomains>
+    <AppDomain>prosepilot.io</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Document"/>
+  </Hosts>
+  <Requirements>
+    <Sets>
+      <Set Name="WordApi" MinVersion="1.13"/>
+    </Sets>
+  </Requirements>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://prosepilot.io/word-addin/index.html"/>
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:type="VersionOverridesV1_1">
+    <Hosts>
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+          <FunctionFile resid="Functions.Url"/>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <CustomTab id="ProsePilotTab">
+              <Group id="ProsePilotGroup">
+                <Label resid="ProsePilotGroup.Label"/>
+                <Control xsi:type="Button" id="CheckGrammar">
+                  <Label resid="CheckGrammar.Label"/>
+                  <Supertip>
+                    <Title resid="CheckGrammar.Label"/>
+                    <Description resid="CheckGrammar.TipDescription"/>
+                  </Supertip>
+                  <Icon resid="Icon.48" size="48"/>
+                  <Icon resid="Icon.128" size="128"/>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>ProsePilotTaskpane</TaskpaneId>
+                    <Title resid="Taskpane.Title"/>
+                  </Action>
+                </Control>
+                <Control xsi:type="Button" id="AutoCorrect">
+                  <Label resid="AutoCorrect.Label"/>
+                  <Supertip>
+                    <Title resid="AutoCorrect.Label"/>
+                    <Description resid="AutoCorrect.TipDescription"/>
+                  </Supertip>
+                  <Icon resid="Icon.48" size="48"/>
+                  <Icon resid="Icon.128" size="128"/>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>autoCorrect</FunctionName>
+                  </Action>
+                </Control>
+              </Group>
+              <Label resid="ProsePilotTab.Label"/>
+            </CustomTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16" DefaultValue="https://prosepilot.io/icons/icon16.png"/>
+        <bt:Image id="Icon.48" DefaultValue="https://prosepilot.io/icons/icon48.png"/>
+        <bt:Image id="Icon.128" DefaultValue="https://prosepilot.io/icons/icon128.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Functions.Url" DefaultValue="https://prosepilot.io/word-addin/functions.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://prosepilot.io/word-addin/index.html"/>
+      </bt:Urls>
+      <bt:Strings>
+        <bt:String id="ProsePilotTab.Label">ProsePilot</bt:String>
+        <bt:String id="ProsePilotGroup.Label">Writing Tools</bt:String>
+        <bt:String id="CheckGrammar.Label">Check</bt:String>
+        <bt:String id="CheckGrammar.TipDescription">Check grammar and spelling in your document.</bt:String>
+        <bt:String id="AutoCorrect.Label">Auto-Fix</bt:String>
+        <bt:String id="AutoCorrect.TipDescription">Automatically fix all grammar and spelling errors.</bt:String>
+        <bt:String id="Taskpane.Title">ProsePilot</bt:String>
+      </bt:Strings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>

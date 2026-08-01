@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProsePilot</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js" type="text/javascript"></script>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">Pp</div>
+      <h1>ProsePilot</h1>
+      <div class="header-actions">
+        <button id="btn-settings" class="icon-btn" title="Settings">&#9881;</button>
+      </div>
+    </div>
+
+    <!-- Mode Selector -->
+    <div class="mode-bar">
+      <button class="mode-btn active" data-mode="suggest">
+        <span class="mode-dot suggest"></span> Suggest
+      </button>
+      <button class="mode-btn" data-mode="auto">
+        <span class="mode-dot auto"></span> Auto-fix
+      </button>
+    </div>
+
+    <!-- Status Bar -->
+    <div id="status-bar" class="status-bar">
+      <span id="status-text">Click "Check" to scan your document</span>
+    </div>
+
+    <!-- Check Button -->
+    <div class="action-bar">
+      <button id="btn-check" class="primary-btn">
+        <span id="check-icon">&#10003;</span>
+        <span id="check-label">Check Document</span>
+      </button>
+    </div>
+
+    <!-- Issues List -->
+    <div id="issues-container" class="issues-container">
+      <div id="issues-empty" class="empty-state">
+        <div class="empty-icon">&#9998;</div>
+        <p>No issues found</p>
+        <p class="empty-hint">Your writing looks great!</p>
+      </div>
+      <div id="issues-list" class="issues-list"></div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <span id="issue-count">0 issues</span>
+      <span class="footer-sep">&middot;</span>
+      <span id="word-count">0 words</span>
+    </div>
+  </div>
+
+  <script src="app.js" type="text/javascript"></script>
+</body>
+</html>
