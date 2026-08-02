@@ -1,6 +1,7 @@
 import type { CheckRequest, CheckResponse, GrammarIssue, RewriteRequest, RewriteResponse, ProtectedFact, VoiceProfile } from "@prosepilot/writing-core";
 import { extractProtectedFacts, validateFacts, computeHash, shouldShowIssue } from "@prosepilot/writing-core";
 import { randomUUID } from "crypto";
+import { checkWithLocalModel } from "./localGrammarModel.js";
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY!;
 const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
@@ -121,8 +122,18 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     // === CAPITALIZATION ===
     // Sentence starts with lowercase after period/exclamation/question
     { pattern: /([.!?]\s+)([a-z])/g, replacement: (_m, p1, p2) => p1 + p2.toUpperCase(), category: "grammar", rule: "capitalize_after_period", explanation: "Capitalize the first word of a new sentence." },
-    // Sentence start at beginning of text — capitalize first letter
-    { pattern: /^([a-z])/g, replacement: (_m: string, letter: string) => letter.toUpperCase(), category: "grammar", rule: "capitalize_sentence_start", explanation: "Capitalize the first word of a sentence." },
+    // Sentence start at beginning of text — capitalize first letter. Tolerates leading
+    // whitespace/newlines before the first word: contentEditable extraction (e.g. Outlook's
+    // compose box) can produce text with a leading "\n" from an empty first line, which
+    // defeated the old strict ^([a-z]) anchor and silently skipped this fix entirely.
+    { pattern: /^(\s*)([a-z])/g, replacement: (_m: string, ws: string, letter: string) => ws + letter.toUpperCase(), category: "grammar", rule: "capitalize_sentence_start", explanation: "Capitalize the first word of a sentence." },
+
+    // === SUBJECT-VERB AGREEMENT (deterministic, unambiguous cases only) ===
+    // "has" only agrees with he/she/it/singular nouns — it is NEVER correct after I/you/we/they,
+    // so this is a safe, always-correct fix (unlike general subject-verb agreement, which needs
+    // real parsing). Matched via lookbehind so only "has" itself is replaced — the pronoun's own
+    // capitalization (handled by the rules above) stays a separate, non-overlapping edit.
+    { pattern: /(?<=\b(?:i|you|we|they)\s)has\b/gi, replacement: "have", category: "grammar", rule: "subject_verb_agreement", explanation: "Use 'have', not 'has', with I/you/we/they." },
     // Product/brand names — Prosepilot → ProsePilot
     { pattern: /\bProsepilot\b/g, replacement: "ProsePilot", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'ProsePilot' should be capitalized correctly." },
     { pattern: /\bGrammarly\b/gi, replacement: "Grammarly", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'Grammarly' should be capitalized correctly." },
@@ -273,6 +284,15 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
     };
   }
 
+  // Tier 1.5: local small-model grammar pass (Xenova/grammar-synthesis-small, in-process,
+  // no network call). Runs in EVERY mode, including lightweight — this is what makes the
+  // extension's fast-pass actually smart instead of just rule engine + LT. It's fast
+  // (~150-300ms warm) and its own internal diff/safety-filter (see localGrammarModel.ts)
+  // means only narrow, deterministic-looking fixes come back safeAuto:true; anything it's
+  // not certain about (including meaning-changing hallucinations observed in testing, e.g.
+  // "tenant" -> "landlord") comes back safeAuto:false, same treatment as DeepSeek below.
+  const localModelPromise = checkWithLocalModel(text);
+
   // Tier 1: LanguageTool (free, self-hosted) + Tier 2: DeepSeek (clarity/tone/grammar AI pass).
   // These two calls don't depend on each other's results whenever DeepSeek is going to run
   // unconditionally (mode "rewrite"/"report"/"review" — which covers every mode the extension's
@@ -291,9 +311,10 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
       aiIssues = await callDeepSeekForIssues(text);
     }
   }
+  const localModelIssues = await localModelPromise;
 
-  // Merge: rule-based + LT + AI, deduplicate by offset proximity
-  const mergedIssues = mergeAllIssues(ruleIssues, ltIssues, aiIssues);
+  // Merge: rule-based + local model + LT + AI, deduplicate by offset proximity
+  const mergedIssues = mergeAllIssues(ruleIssues, localModelIssues, ltIssues, aiIssues);
 
   // Voice profile filtering: remove style deviations that match user's habits
   const allIssues = voiceProfile
@@ -311,7 +332,7 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
       issueCount: allIssues.length,
       checkMode: mode,
       latencyMs,
-      engineTier: aiIssues.length > 0 ? "deepseek" : ltIssues.length > 0 ? "lt" : "rule",
+      engineTier: aiIssues.length > 0 ? "deepseek" : ltIssues.length > 0 ? "lt" : localModelIssues.length > 0 ? "local-model" : "rule",
     },
   };
 }
@@ -439,12 +460,24 @@ Return ONLY the JSON array, no other text.`;
   }
 }
 
-function mergeAllIssues(ruleIssues: GrammarIssue[], ltIssues: GrammarIssue[], aiIssues: GrammarIssue[]): GrammarIssue[] {
+function mergeAllIssues(ruleIssues: GrammarIssue[], localModelIssues: GrammarIssue[], ltIssues: GrammarIssue[], aiIssues: GrammarIssue[]): GrammarIssue[] {
   // Start with rule-based issues (highest priority — always correct)
   const merged = [...ruleIssues];
   const usedPositions = new Set(ruleIssues.map((i) => `${i.startUtf16}-${i.endUtf16}`));
 
-  // Add LT issues that don't overlap with rule-based
+  // Add local-model issues that don't overlap with rule-based. Priority right after the
+  // rule engine: its safeAuto:true fixes have already passed the narrow safety filter in
+  // localGrammarModel.ts, and its safeAuto:false suggestions are still worth surfacing
+  // ahead of LT/DeepSeek noise at the same position.
+  for (const localIssue of localModelIssues) {
+    const posKey = `${localIssue.startUtf16}-${localIssue.endUtf16}`;
+    if (!usedPositions.has(posKey)) {
+      merged.push(localIssue);
+      usedPositions.add(posKey);
+    }
+  }
+
+  // Add LT issues that don't overlap with anything already placed
   for (const ltIssue of ltIssues) {
     const posKey = `${ltIssue.startUtf16}-${ltIssue.endUtf16}`;
     if (!usedPositions.has(posKey)) {

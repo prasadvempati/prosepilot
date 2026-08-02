@@ -11,6 +11,7 @@ import { billingRoutes } from "./routes/billing.js";
 import { documentRoutes } from "./routes/documents.js";
 import { voiceProfileRoutes } from "./routes/voice-profile.js";
 import { clerkWebhookRoutes } from "./routes/clerk-webhook.js";
+import { warmUpLocalModel } from "./engine/localGrammarModel.js";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync } from "fs";
@@ -113,6 +114,11 @@ const host = "0.0.0.0";
 
 try {
   await app.listen({ port, host });
+  // Warm up the local grammar model in the background so the ~30-45s first-load cost
+  // happens once at boot, not on some unlucky user's first request. Deliberately not
+  // awaited — the server should start accepting traffic immediately either way, and
+  // checkWithLocalModel() already fails safe (returns []) if the model isn't ready yet.
+  warmUpLocalModel();
 } catch (err) {
   process.exit(1);
 }
