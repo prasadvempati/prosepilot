@@ -326,6 +326,8 @@ CRITICAL RULES:
 4. If you're unsure about exact text, skip the issue
 
 SPECIFIC PATTERNS TO CHECK:
+- TYPOS IN COMMON WORDS: Catch simple typos where a common function/word is missing a letter, has an extra letter, or has transposed letters — e.g. "wen" → "when", "somone" → "someone", "teh" → "the", "recieve" → "receive". These are easy to miss because the misspelled form can look like a rare word or name. Always infer the most contextually PROBABLE intended word given the sentence, never the nearest dictionary match in isolation — a plain spellchecker might "correct" "wen" to the name "Wen", but in running text the overwhelmingly likely intent is the common word "when". Treat this category with the same priority as the more specific patterns below.
+- SUBJECT-VERB AGREEMENT: The verb must agree with its subject in person and number — "he go" → "he goes", "someone open" → "someone opens", "I has" → "I have", "they was" → "they were". Third-person singular subjects (he/she/it/someone/anyone/the tenant) take the -s/-es verb form.
 - PROPER NOUNS: Product/brand names MUST be capitalized correctly: "prosepilot" → "ProsePilot", "grammarly" → "Grammarly", "deepseek" → "DeepSeek", "openai" → "OpenAI", "microsoft" → "Microsoft"
 - ARTICLE CAPITALIZATION: "the edge" → "The Edge" (when referring to a product), "the internet" → "The Internet" (when used as a proper noun)
 - SENTENCE START: First word of every sentence must be capitalized

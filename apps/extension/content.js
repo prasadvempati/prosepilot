@@ -5,15 +5,26 @@
 // Listen for Clerk token handoff from the web app.
 // This runs OUTSIDE the IIFE so it fires even when the content script early-returns
 // on prosepilot.io, enabling the token bridge without injecting grammar-check UI.
-let clerkToken = null;
-window.addEventListener("message", (event) => {
-  if (event.origin !== "https://prosepilot.io") return;
-  if (event.data?.type === "CLERK_TOKEN_HANDOFF" && event.data?.token) {
-    clerkToken = event.data.token;
-    chrome.storage.local.set({ prosepilot_clerk_token: event.data.token });
-    chrome.runtime.sendMessage({ action: "setClerkToken", token: event.data.token });
-  }
-});
+//
+// `var` (not `let`) + a window-level guard flag: unpacked-extension reloads (and some
+// SPA navigations) cause Chrome to re-inject this same script into a tab that already
+// has a live copy running. A top-level `let` would throw "already declared" on the
+// second injection and permanently break the whole script for that page — `var`
+// re-declares silently without resetting the current value, and the guard stops the
+// message listener from being registered twice.
+var clerkToken;
+if (!window.__prosepilot_bridge_installed) {
+  window.__prosepilot_bridge_installed = true;
+  clerkToken = null;
+  window.addEventListener("message", (event) => {
+    if (event.origin !== "https://prosepilot.io") return;
+    if (event.data?.type === "CLERK_TOKEN_HANDOFF" && event.data?.token) {
+      clerkToken = event.data.token;
+      chrome.storage.local.set({ prosepilot_clerk_token: event.data.token });
+      chrome.runtime.sendMessage({ action: "setClerkToken", token: event.data.token });
+    }
+  });
+}
 
 (function () {
   "use strict";
@@ -386,13 +397,26 @@ window.addEventListener("message", (event) => {
       "[role='textbox']",
     ];
     const elements = [];
-    for (const sel of selectors) {
-      document.querySelectorAll(sel).forEach((el) => {
-        if (!monitored.has(el) && isVisible(el) && isLargeEnough(el)) {
-          elements.push(el);
-        }
+    const seen = new Set();
+
+    // Recursively search shadow DOMs
+    function searchRoot(root) {
+      for (const sel of selectors) {
+        root.querySelectorAll(sel).forEach((el) => {
+          if (seen.has(el)) return;
+          seen.add(el);
+          if (!monitored.has(el) && isVisible(el) && isLargeEnough(el)) {
+            elements.push(el);
+          }
+        });
+      }
+      // Recurse into shadow roots
+      root.querySelectorAll("*").forEach((el) => {
+        if (el.shadowRoot) searchRoot(el.shadowRoot);
       });
     }
+
+    searchRoot(document);
     return elements;
   }
 
@@ -550,15 +574,41 @@ window.addEventListener("message", (event) => {
     if (!text) return false;
 
     const autoIssues = issues
-      .filter((i) => i.confidence >= 0.85 && i.category !== "style" && i.category !== "tone" && i.replacement && i.original !== i.replacement)
+      // "missing_period" fires on ANY line that looks sentence-shaped but has no trailing
+      // punctuation — including the line the user is still actively typing. Auto-applying
+      // it mid-keystroke inserts a period into text that isn't finished yet, corrupting
+      // what the user types next. Leave it for Suggest mode / manual review instead.
+      //
+      // safeAuto: the API marks every AI (DeepSeek) suggestion safeAuto:false on purpose —
+      // AI offsets/rewrites can be wrong or based on already-corrupted text, so the server
+      // is telling the client not to apply them without review. Only rule-engine issues
+      // (regex-based, deterministic) come back safeAuto:true. Honor that.
+      .filter((i) => i.safeAuto === true && i.confidence >= 0.85 && i.category !== "style" && i.category !== "tone" && i.rule !== "missing_period" && i.replacement && i.original !== i.replacement)
       .filter((i) => i.startUtf16 !== null && i.startUtf16 !== undefined);
 
     if (autoIssues.length === 0) return false;
+
+    // Save the caret's character offset (if the user is actively focused in this field)
+    // BEFORE mutating the DOM. Replacing a text node the live selection is anchored to
+    // silently invalidates the browser's cursor, causing it to jump elsewhere and the
+    // next keystrokes to land in the wrong place. We restore it after editing, below.
+    let caretOffset = null;
+    const hadFocus = document.activeElement === el || el.contains(document.activeElement);
+    if (hadFocus) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        if (el.contains(range.startContainer)) {
+          caretOffset = getGlobalOffset(el, range.startContainer, range.startOffset);
+        }
+      }
+    }
 
     // Sort by offset descending (end-to-start to preserve positions)
     const sorted = [...autoIssues].sort((a, b) => b.startUtf16 - a.startUtf16);
 
     let applied = 0;
+    let caretDelta = 0; // net character shift to apply to the saved caret offset
     for (const issue of sorted) {
       const idx = issue.startUtf16;
       // Verify the text matches
@@ -582,6 +632,12 @@ window.addEventListener("message", (event) => {
         range.deleteContents();
         range.insertNode(document.createTextNode(issue.replacement));
         applied++;
+
+        // Only corrections that land entirely before the caret's original position
+        // shift where the caret should end up. Corrections after it don't matter.
+        if (caretOffset !== null && idx + issue.original.length <= caretOffset) {
+          caretDelta += issue.replacement.length - issue.original.length;
+        }
       } catch (e) {
         // Range error — skip this issue
       }
@@ -589,8 +645,29 @@ window.addEventListener("message", (event) => {
 
     if (applied > 0) {
       el.dispatchEvent(new Event("input", { bubbles: true }));
+
+      // Restore the caret to its logical position, shifted by however much the
+      // text before it grew or shrank. Skip if focus moved elsewhere in the meantime.
+      if (caretOffset !== null && (document.activeElement === el || el.contains(document.activeElement))) {
+        restoreCaretOffset(el, caretOffset + caretDelta);
+      }
     }
     return applied > 0;
+  }
+
+  function restoreCaretOffset(el, offset) {
+    try {
+      const { node, offset: localOffset } = findNodeAtOffset(el, Math.max(0, offset));
+      if (!node) return;
+      const range = document.createRange();
+      range.setStart(node, Math.min(localOffset, node.textContent.length));
+      range.collapse(true);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) {
+      // Selection restore failed — non-fatal, correction is still applied
+    }
   }
 
   function findLastUserTextNode(el) {
@@ -727,6 +804,23 @@ window.addEventListener("message", (event) => {
 
     if (sorted.length === 0) { console.warn("[ProsePilot] No issues matched in text"); return; }
 
+    // Save the caret's character offset before splitting any text nodes. Underlining
+    // works by replacing a live text node with three new nodes (before + <span> + after)
+    // — if the browser's selection was anchored inside the node we just removed, the
+    // cursor silently jumps and subsequent keystrokes land wherever it ends up. Wrapping
+    // doesn't change the total text length, so no offset delta is needed on restore.
+    let caretOffset = null;
+    const hadFocus = document.activeElement === el || el.contains(document.activeElement);
+    if (hadFocus) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        if (el.contains(range.startContainer)) {
+          caretOffset = getGlobalOffset(el, range.startContainer, range.startOffset);
+        }
+      }
+    }
+
     const textNodes = collectTextNodes(el);
     console.log("[ProsePilot] wrapIssuesInSpans:", textNodes.length, "text nodes,", sorted.length, "issues");
 
@@ -782,6 +876,12 @@ window.addEventListener("message", (event) => {
       if (!wrapped) {
         console.warn("[ProsePilot] Could not find text node containing:", JSON.stringify(issue.original));
       }
+    }
+
+    // Restore the caret to its original logical position now that the text nodes it may
+    // have been anchored to have been replaced. Skip if focus moved elsewhere meanwhile.
+    if (caretOffset !== null && (document.activeElement === el || el.contains(document.activeElement))) {
+      restoreCaretOffset(el, caretOffset);
     }
   }
 
@@ -1051,11 +1151,22 @@ window.addEventListener("message", (event) => {
 
     console.log(`[ProsePilot] Mode: ${currentMode}, Issues found: ${issues.length}`, issues);
 
+    // Staleness guard: `text` above was snapshotted BEFORE the await checkText() network
+    // round-trip. If the user kept typing while that request was in flight, every offset
+    // in `issues` describes positions in text that no longer exists — applying them can
+    // land mid-word (e.g. splitting "table" into "ta.ble") even though the substring check
+    // inside the apply functions happens to pass on short/common fragments. If the live
+    // text has moved on, drop this round's corrections; the next debounced check (which
+    // will fire once typing settles) will re-check the current text correctly.
+    if (currentMode === "auto" && getElementText(el) !== text) {
+      return;
+    }
+
     if (currentMode === "auto") {
       // Auto-correct: textarea/input use full replacement, contentEditable uses surgical replacement
       if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
         const autoIssues = issues.filter(
-          (i) => i.confidence >= 0.85 && i.category !== "style" && i.category !== "tone" && i.replacement && i.original !== i.replacement
+          (i) => i.safeAuto === true && i.confidence >= 0.85 && i.category !== "style" && i.category !== "tone" && i.rule !== "missing_period" && i.replacement && i.original !== i.replacement
         );
         if (autoIssues.length > 0) {
           let newText = text;
@@ -1093,16 +1204,26 @@ window.addEventListener("message", (event) => {
           showToast("✓ Corrections applied");
         }
         // Show underlines for issues that couldn't be auto-fixed
-        const remaining = issues.filter((i) => i.confidence < 0.85 || i.category === "style" || i.category === "tone" || !i.replacement || i.original === i.replacement);
+        const remaining = issues.filter((i) => i.safeAuto !== true || i.confidence < 0.85 || i.category === "style" || i.category === "tone" || i.rule === "missing_period" || !i.replacement || i.original === i.replacement);
         if (remaining.length > 0) {
           setTimeout(() => {
             isAutoCorrecting = false;
             isRenderingUnderlines = false;
             renderUnderlines(el, remaining);
+            // Catch-up: the mutation observer ignores DOM changes while the flags above
+            // are true (so it doesn't react to our own underline-drawing edits) — but that
+            // means real keystrokes typed during this window were silently dropped and
+            // never re-checked, leaving stale underlines on text that's since changed.
+            // If the live text has moved on from what we just rendered against, re-check now.
+            if (getElementText(el) !== lastCheckedText.get(el)) triggerCheck(el);
           }, 100);
           return;
         }
-        setTimeout(() => { isAutoCorrecting = false; isRenderingUnderlines = false; }, 0);
+        setTimeout(() => {
+          isAutoCorrecting = false;
+          isRenderingUnderlines = false;
+          if (getElementText(el) !== lastCheckedText.get(el)) triggerCheck(el);
+        }, 0);
         return;
       }
       // Fallback: show underlines for issues that couldn't be auto-applied
@@ -1175,12 +1296,20 @@ window.addEventListener("message", (event) => {
     return false;
   }
 
-  // Walk up from target to find the closest editable container
+  // Walk up from target to find the closest editable container (crosses shadow DOM boundaries)
   function findClosestEditable(target) {
     let el = target;
     while (el && el !== document.body && el !== document.documentElement) {
       if (isEditable(el)) return el;
-      el = el.parentElement;
+      // Try parentElement first (normal DOM)
+      if (el.parentElement) {
+        el = el.parentElement;
+      } else if (el.parentNode && el.parentNode.nodeType === 11) {
+        // We're inside a shadow root — jump to the host element
+        el = el.parentNode.host;
+      } else {
+        break;
+      }
     }
     return null;
   }

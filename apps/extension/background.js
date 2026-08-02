@@ -193,6 +193,7 @@ async function handleCheckInline(text, sendResponse) {
 
     // Try ProsePilot API first
     let issues = [];
+    let prosePilotSucceeded = false;
     try {
       const { clerkToken } = await chrome.storage.local.get("clerkToken");
       const headers = { "Content-Type": "application/json" };
@@ -202,7 +203,11 @@ async function handleCheckInline(text, sendResponse) {
         method: "POST",
         headers,
         body: JSON.stringify({ text, mode: "review" }),
-        signal: AbortSignal.timeout(5000),
+        // DeepSeek round-trips regularly took 2.3-4.5s in testing, right up against the old
+        // 5s ceiling — several requests were observed getting aborted at exactly the 5.0s
+        // mark, forcing a silent fallback to the much weaker LanguageTool checker even
+        // though the real engine would have answered a moment later. Give it real headroom.
+        signal: AbortSignal.timeout(15000),
       });
 
       if (response.ok) {
@@ -210,6 +215,7 @@ async function handleCheckInline(text, sendResponse) {
         issues = (data.issues || []).map((i) => ({
           id: i.id,
           category: i.category,
+          rule: i.rule ?? null,
           original: i.original,
           replacement: i.replacement,
           explanation: i.explanation,
@@ -217,13 +223,22 @@ async function handleCheckInline(text, sendResponse) {
           confidence: i.confidence ?? 0.85,
           safeAuto: i.safeAuto ?? ((i.category === "spelling" || i.category === "grammar") && (i.confidence ?? 0.85) >= 0.85),
         }));
+        // The call succeeded — a legitimately empty array means the AI + rule engine
+        // reviewed the text and found nothing wrong. That's a real result, not a failure,
+        // and must NOT be treated the same as "the API was unreachable."
+        prosePilotSucceeded = true;
       }
     } catch (e) {
       // ProsePilot API unavailable — fall through to LanguageTool
     }
 
-    // Fallback: LanguageTool public API (free, no key needed)
-    if (issues.length === 0) {
+    // Fallback: LanguageTool public API (free, no key needed) — only when the ProsePilot
+    // call itself failed (network error, timeout, non-2xx). Previously this also fired
+    // whenever ProsePilot succeeded but simply found zero issues, which meant a clean,
+    // context-aware "no issues" result from the real engine could get silently overridden
+    // by LanguageTool's weaker, non-contextual dictionary spellcheck (e.g. suggesting the
+    // capitalized name "Wen" for the typo "wen" instead of recognizing it should be "when").
+    if (!prosePilotSucceeded) {
       issues = await checkWithLanguageTool(text);
     }
 
