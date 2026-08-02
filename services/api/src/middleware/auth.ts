@@ -3,7 +3,7 @@ import { verifyToken } from "@clerk/backend";
 
 declare module "fastify" {
   interface FastifyRequest {
-    auth: { userId: string };
+    auth: { userId: string | null };
   }
 }
 
@@ -17,15 +17,17 @@ export async function verifyRequest(
     return;
   }
 
+  // No Clerk key configured — allow anonymous access
   if (!process.env.CLERK_SECRET_KEY) {
-    return reply.status(500).send({ error: "SERVER_MISCONFIGURED", message: "Authentication not configured" });
+    request.auth = { userId: null };
+    return;
   }
 
   const header = request.headers.authorization;
   if (!header || !header.startsWith("Bearer ")) {
-    return reply
-      .status(401)
-      .send({ error: "UNAUTHORIZED", message: "Missing or invalid Authorization header" });
+    // No token provided — allow anonymous access (lower limits)
+    request.auth = { userId: null };
+    return;
   }
 
   const token = header.slice(7);
@@ -35,8 +37,7 @@ export async function verifyRequest(
     });
     request.auth = { userId: payload.sub };
   } catch {
-    return reply
-      .status(401)
-      .send({ error: "UNAUTHORIZED", message: "Invalid or expired token" });
+    // Invalid token — allow anonymous access rather than blocking
+    request.auth = { userId: null };
   }
 }

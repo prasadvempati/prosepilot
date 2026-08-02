@@ -5,9 +5,12 @@
 // Listen for Clerk token handoff from the web app.
 // This runs OUTSIDE the IIFE so it fires even when the content script early-returns
 // on prosepilot.io, enabling the token bridge without injecting grammar-check UI.
+let clerkToken = null;
 window.addEventListener("message", (event) => {
   if (event.origin !== "https://prosepilot.io") return;
   if (event.data?.type === "CLERK_TOKEN_HANDOFF" && event.data?.token) {
+    clerkToken = event.data.token;
+    chrome.storage.local.set({ prosepilot_clerk_token: event.data.token });
     chrome.runtime.sendMessage({ action: "setClerkToken", token: event.data.token });
   }
 });
@@ -19,19 +22,24 @@ window.addEventListener("message", (event) => {
   const DEBOUNCE_MS = 300;
   const MIN_TEXT_LENGTH = 10;
   const STORAGE_KEY = "prosepilot_grammar_mode";
+  const DISABLED_KEY = "prosepilot_disabled";
   const MAX_CHECK_LENGTH = 100000; // 100K chars max per grammar check
 
   // Skip grammar-check UI on ProsePilot's own site
   if (window.location.hostname.includes("prosepilot.io")) return;
 
+  // Prevent double-injection (Edge may inject content scripts twice)
+  if (window.__prosepilot_loaded) return;
+  window.__prosepilot_loaded = true;
+
   // Track which elements we're monitoring
   const monitored = new WeakSet();
   // Track current issues per element
-  const issueMap = new Map();
+  const issueMap = new WeakMap();
   // Track active popup
   let activePopup = null;
   // Track current mode
-  let currentMode = "suggest";
+  let currentMode = "auto";
   // Track focused element
   let focusedElement = null;
   // Flag to prevent feedback loop from MutationObserver during underline rendering
@@ -42,15 +50,23 @@ window.addEventListener("message", (event) => {
   const lastCheckedText = new WeakMap();
   // Flag to stop checks when extension context is invalidated
   let isExtensionAlive = true;
+  // Interval ID for periodic scan — must be stored so it can be cleared
+  let periodicScanIntervalId = null;
+  // MutationObserver for detecting new editable elements — stored for cleanup
+  let bodyObserver = null;
 
   // ==================== MODE MANAGER ====================
 
+  let isDisabled = false;
+
   async function loadMode() {
     try {
-      const result = await chrome.storage.local.get(STORAGE_KEY);
-      currentMode = result[STORAGE_KEY] || "suggest";
+      const result = await chrome.storage.local.get([STORAGE_KEY, DISABLED_KEY]);
+      currentMode = result[STORAGE_KEY] || "auto";
+      isDisabled = !!result[DISABLED_KEY];
     } catch {
       currentMode = "suggest";
+      isDisabled = false;
     }
   }
 
@@ -68,6 +84,7 @@ window.addEventListener("message", (event) => {
   let floatingIcon = null;
   let popover = null;
   let pulseCount = 0;
+  let pulseTimerId = null;
 
   function createFloatingIcon() {
     if (floatingIcon) return;
@@ -131,9 +148,11 @@ window.addEventListener("message", (event) => {
     // Pulse animation (first 3 times only)
     if (pulseCount < 3) {
       pulseCount++;
+      if (pulseTimerId) clearTimeout(pulseTimerId);
       btn.style.animation = "prosepilot-pulse 2s ease-in-out 1";
-      setTimeout(() => {
+      pulseTimerId = setTimeout(() => {
         btn.style.animation = "";
+        pulseTimerId = null;
       }, 2000);
     }
   }
@@ -196,6 +215,20 @@ window.addEventListener("message", (event) => {
           Grammar Mode
         </div>
         ${modesHtml}
+        <div style="border-top:1px solid #e5e7eb;margin:4px 0;"></div>
+        <div class="prosepilot-mode-option" id="prosepilot-turnoff" style="
+          display:flex;align-items:center;gap:10px;padding:10px 12px;
+          border-radius:8px;cursor:pointer;transition:background 0.15s;
+        ">
+          <div style="
+            width:10px;height:10px;border-radius:50%;flex-shrink:0;
+            background:transparent;border:2px solid #9ca3af;
+          "></div>
+          <div>
+            <div style="font-size:13px;font-weight:500;color:#6b7280;">Turn off ProsePilot</div>
+            <div style="font-size:11px;color:#9ca3af;">Stop all grammar checking</div>
+          </div>
+        </div>
       </div>
     `;
 
@@ -229,16 +262,31 @@ window.addEventListener("message", (event) => {
       });
     });
 
-    // Close on click outside
-    setTimeout(() => {
-      document.addEventListener("click", closePopoverOnOutside, { once: true });
-    }, 10);
-  }
+    // Turn off ProsePilot
+    const turnOffBtn = popover.querySelector("#prosepilot-turnoff");
+    if (turnOffBtn) {
+      turnOffBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        chrome.storage.local.set({ [DISABLED_KEY]: true });
+        isDisabled = true;
+        closePopover();
+        // Clear all underlines on the current element
+        if (focusedElement) clearUnderlines(focusedElement);
+        showToast("ProsePilot turned off. Re-enable from the extension icon.", "info");
+      });
+      turnOffBtn.addEventListener("mouseenter", () => { turnOffBtn.style.background = "#f3f4f6"; });
+      turnOffBtn.addEventListener("mouseleave", () => { turnOffBtn.style.background = "transparent"; });
+    }
+
+  // Close on click outside — use persistent listener removed on close
+  document.addEventListener("click", closePopoverOnOutside);
+}
 
   function closePopover() {
     if (popover) {
       popover.remove();
       popover = null;
+      document.removeEventListener("click", closePopoverOnOutside);
     }
   }
 
@@ -285,13 +333,20 @@ window.addEventListener("message", (event) => {
 
   // ==================== TOAST NOTIFICATIONS ====================
 
+  let toastTimerId = null;
+  let toastFadeTimerId = null;
+
   function showToast(message, type = "success") {
+    if (toastTimerId) clearTimeout(toastTimerId);
+    if (toastFadeTimerId) clearTimeout(toastFadeTimerId);
+
     const existing = document.getElementById("prosepilot-toast");
     if (existing) existing.remove();
 
     const toast = document.createElement("div");
     toast.id = "prosepilot-toast";
     const bgColor = type === "success" ? "#059669" : type === "info" ? "#6366f1" : "#ef4444";
+    const safeMessage = escapeHtml(String(message));
     toast.innerHTML = `
       <div style="
         position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:2147483647;
@@ -302,14 +357,18 @@ window.addEventListener("message", (event) => {
         box-shadow:0 4px 12px rgba(0,0,0,0.15);
         animation:prosepilot-toast-in 0.3s ease-out;
       ">
-        ${message}
+        ${safeMessage}
       </div>
     `;
     document.body.appendChild(toast);
-    setTimeout(() => {
+    toastTimerId = setTimeout(() => {
       toast.style.opacity = "0";
       toast.style.transition = "opacity 0.3s";
-      setTimeout(() => toast.remove(), 300);
+      toastFadeTimerId = setTimeout(() => {
+        toast.remove();
+        toastFadeTimerId = null;
+      }, 300);
+      toastTimerId = null;
     }, 2500);
   }
 
@@ -358,27 +417,37 @@ window.addEventListener("message", (event) => {
     if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
       return el.value;
     }
-    // For contentEditable: only return user text (before signature separator)
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, null);
-    let text = "";
-    let node;
-    while ((node = walker.nextNode())) {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        // Outlook signature markers: <hr>, <div class="Signature">, HTML comments
-        const tag = node.tagName;
-        if (tag === "HR") break;
-        if (tag === "DIV" && node.getAttribute("class") && /signature/i.test(node.getAttribute("class"))) break;
-        if (tag === "DIV" && node.getAttribute("id") && /signature/i.test(node.getAttribute("id"))) break;
-        continue;
-      }
-      const t = node.textContent;
-      // Stop at signature separator ("--" or "—" on its own)
-      if (t.match(/^\s*--\s*$/) || t.match(/^\s*—\s*$/)) break;
-      // Outlook signature markers in text (e.g. copied HTML as text)
-      if (t.match(/<hr[\s>]/i) || t.match(/<div\s+class\s*=\s*["']Signature/i) || t.match(/^<!--/)) break;
-      text += t;
+
+    // Strategy 1: Try innerText (most reliable for contentEditable — gives rendered text)
+    let raw = "";
+    try {
+      raw = el.innerText || "";
+    } catch (e) { /* fallback below */ }
+
+    // Strategy 2: If innerText empty, try textContent
+    if (!raw || raw.trim().length === 0) {
+      try {
+        raw = el.textContent || "";
+      } catch (e) { return ""; }
     }
-    return text;
+
+    // Strategy 3: If still empty, walk into shadow roots
+    if (!raw || raw.trim().length === 0) {
+      try {
+        const textNodes = collectTextNodes(el);
+        for (const node of textNodes) raw += node.textContent;
+      } catch (e) { return ""; }
+    }
+
+    if (!raw || raw.trim().length === 0) return "";
+
+    // Remove Outlook signature: everything after "--" or "—" on its own line
+    const dashIdx = raw.search(/^\s*--\s*$/m);
+    if (dashIdx !== -1) raw = raw.substring(0, dashIdx);
+    const emDashIdx = raw.search(/^\s*—\s*$/m);
+    if (emDashIdx !== -1) raw = raw.substring(0, emDashIdx);
+
+    return raw;
   }
 
   function setElementText(el, newText) {
@@ -392,9 +461,7 @@ window.addEventListener("message", (event) => {
     } else {
       // For contentEditable: save caret position, replace text, restore caret
       const textNodes = [];
-      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
-      let node;
-      while ((node = walker.nextNode())) {
+      for (const node of collectTextNodes(el)) {
         if (node.textContent.match(/^\s*--/) || node.textContent.match(/^\s*—/)) break;
         if (node.textContent.trim().length > 0) textNodes.push(node);
       }
@@ -443,27 +510,99 @@ window.addEventListener("message", (event) => {
     }
   }
 
-  function findFirstTextNode(el) {
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
-    let node;
-    while ((node = walker.nextNode())) {
-      if (node.textContent.trim().length > 0) return node;
+  // Recursive text node finder — crosses shadow DOM boundaries
+  function walkAllTextNodes(el, yieldFn) {
+    const stack = [el];
+    while (stack.length) {
+      const node = stack.pop();
+      if (node.shadowRoot) {
+        for (let i = node.shadowRoot.childNodes.length - 1; i >= 0; i--) stack.push(node.shadowRoot.childNodes[i]);
+      }
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (yieldFn(node)) return node;
+      } else if (node.childNodes) {
+        for (let i = node.childNodes.length - 1; i >= 0; i--) stack.push(node.childNodes[i]);
+      }
     }
     return null;
   }
 
+  // Collect ALL text nodes under el (crossing shadow DOM)
+  function collectTextNodes(el) {
+    const nodes = [];
+    const walk = (n) => {
+      if (n.shadowRoot) { for (const c of n.shadowRoot.childNodes) walk(c); }
+      if (n.nodeType === Node.TEXT_NODE) { nodes.push(n); return; }
+      if (n.childNodes) { for (const c of n.childNodes) walk(c); }
+    };
+    walk(el);
+    return nodes;
+  }
+
+  function findFirstTextNode(el) {
+    return walkAllTextNodes(el, (n) => n.textContent.trim().length > 0);
+  }
+
+  function applyAutoCorrectToContentEditable(el, issues) {
+    // Surgical replacement: find each issue by UTF-16 offset and replace only that text
+    // This preserves Outlook's formatting (bold, links, signature, etc.)
+    const text = getElementText(el);
+    if (!text) return false;
+
+    const autoIssues = issues
+      .filter((i) => i.confidence >= 0.85 && i.category !== "style" && i.category !== "tone" && i.replacement && i.original !== i.replacement)
+      .filter((i) => i.startUtf16 !== null && i.startUtf16 !== undefined);
+
+    if (autoIssues.length === 0) return false;
+
+    // Sort by offset descending (end-to-start to preserve positions)
+    const sorted = [...autoIssues].sort((a, b) => b.startUtf16 - a.startUtf16);
+
+    let applied = 0;
+    for (const issue of sorted) {
+      const idx = issue.startUtf16;
+      // Verify the text matches
+      if (idx < 0 || idx + issue.original.length > text.length) continue;
+      if (text.substring(idx, idx + issue.original.length) !== issue.original) continue;
+
+      // Find the text node and offset for this position
+      const { node: startNode, offset: startOff } = findNodeAtOffset(el, idx);
+      const { node: endNode, offset: endOff } = findNodeAtOffset(el, idx + issue.original.length);
+      if (!startNode || !endNode) continue;
+
+      try {
+        const range = document.createRange();
+        range.setStart(startNode, startOff);
+        range.setEnd(endNode, endOff);
+
+        // Verify range text matches
+        if (range.toString() !== issue.original) continue;
+
+        // Delete the old text and insert the replacement
+        range.deleteContents();
+        range.insertNode(document.createTextNode(issue.replacement));
+        applied++;
+      } catch (e) {
+        // Range error — skip this issue
+      }
+    }
+
+    if (applied > 0) {
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    return applied > 0;
+  }
+
   function findLastUserTextNode(el) {
-    // Walk text nodes, stop at signature separator ("--" or "—")
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
-    let node;
+    // Walk text nodes (crossing shadow DOM), stop at signature separator ("--" or "—")
+    const textNodes = collectTextNodes(el);
     let lastUserNode = null;
-    while ((node = walker.nextNode())) {
+    for (const node of textNodes) {
       const text = node.textContent;
-      // Stop at signature separator — standalone or start of signature line
       if (text.match(/^\s*--/) || text.match(/^\s*—/) || text.match(/^\s*--\s*$/)) break;
       if (text.trim().length > 0) lastUserNode = node;
     }
-    return lastUserNode;
+    return lastUserNode || findFirstTextNode(el);
   }
 
   // ==================== DEBOUNCE ====================
@@ -483,7 +622,7 @@ window.addEventListener("message", (event) => {
     return new Promise((resolve) => {
       try {
         chrome.runtime.sendMessage(
-          { action: "checkInline", text },
+          { action: "checkInline", text, token: clerkToken },
           (response) => {
             if (chrome.runtime.lastError) {
               const msg = chrome.runtime.lastError.message || "";
@@ -515,21 +654,20 @@ window.addEventListener("message", (event) => {
     clearUnderlines(el);
 
     if (!issues || issues.length === 0) {
-      // Delay reset so MutationObserver callbacks see the flag as true
-      setTimeout(() => { isRenderingUnderlines = false; }, 0);
+      isRenderingUnderlines = false;
       return;
     }
 
     const text = getElementText(el);
     if (!text || text.trim().length === 0) {
-      setTimeout(() => { isRenderingUnderlines = false; }, 0);
+      isRenderingUnderlines = false;
       return;
     }
 
     // For textarea/input, show floating indicator
     if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
       showFloatingIndicator(el, issues);
-      setTimeout(() => { isRenderingUnderlines = false; }, 0);
+      isRenderingUnderlines = false;
       return;
     }
 
@@ -537,27 +675,33 @@ window.addEventListener("message", (event) => {
     try {
       wrapIssuesInSpans(el, issues);
     } catch (e) {
+      console.warn("[ProsePilot] wrapIssuesInSpans failed:", e);
       showFloatingIndicator(el, issues);
     }
 
-    // Delay reset so MutationObserver callbacks see the flag as true
+    // Delay reset so MutationObserver callbacks see the flag as true during DOM mutations
     setTimeout(() => { isRenderingUnderlines = false; }, 0);
   }
 
   function clearUnderlines(el) {
     if (!el) return;
-    // Remove all ProsePilot underline spans and unwrap their content
-    const spans = el.querySelectorAll(".prosepilot-underline");
-    spans.forEach((span) => {
-      const parent = span.parentNode;
-      if (parent) {
-        while (span.firstChild) {
-          parent.insertBefore(span.firstChild, span);
-        }
-        parent.removeChild(span);
-        parent.normalize();
-      }
-    });
+    // Unwrap all underline and stale spans, restoring plain text nodes
+    // Crosses shadow DOM boundaries for Outlook compatibility
+    const clearInRoot = (root) => {
+      const spans = root.querySelectorAll(".prosepilot-underline, .prosepilot-stale");
+      spans.forEach((span) => {
+        const parent = span.parentNode;
+        if (!parent) return;
+        const textNode = document.createTextNode(span.textContent);
+        parent.replaceChild(textNode, span);
+      });
+      root.querySelectorAll("*").forEach((child) => {
+        if (child.shadowRoot) clearInRoot(child.shadowRoot);
+      });
+    };
+    clearInRoot(el);
+    // Merge adjacent text nodes left by unwrapping
+    el.normalize();
     // Also remove floating indicator
     const indicator = el.parentNode?.querySelector(".prosepilot-indicator");
     if (indicator) indicator.remove();
@@ -565,102 +709,100 @@ window.addEventListener("message", (event) => {
 
   function wrapIssuesInSpans(el, issues) {
     const text = getElementText(el);
-    if (!text) return;
+    if (!text) { console.warn("[ProsePilot] wrapIssuesInSpans: no text"); return; }
 
-    // Filter to only user text issues (before signature)
     const sorted = [...issues]
       .map((issue) => {
-        const idx = text.indexOf(issue.original);
+        let idx = -1;
+        if (issue.startUtf16 !== null && issue.startUtf16 !== undefined && issue.startUtf16 >= 0) {
+          if (text.substring(issue.startUtf16, issue.startUtf16 + issue.original.length) === issue.original) {
+            idx = issue.startUtf16;
+          }
+        }
+        if (idx === -1) idx = text.indexOf(issue.original);
         return { ...issue, idx };
       })
       .filter((i) => i.idx !== -1)
       .sort((a, b) => a.idx - b.idx);
 
-    if (sorted.length === 0) return;
+    if (sorted.length === 0) { console.warn("[ProsePilot] No issues matched in text"); return; }
 
-    // Use Range API to wrap issues without destroying HTML
-    // Find the user text range (first text node to last text node before signature)
-    const firstTextNode = findFirstTextNode(el);
-    const lastTextNode = findLastUserTextNode(el);
-    if (!firstTextNode || !lastTextNode) return;
+    const textNodes = collectTextNodes(el);
+    console.log("[ProsePilot] wrapIssuesInSpans:", textNodes.length, "text nodes,", sorted.length, "issues");
 
+    // For each issue, search each text node individually — no offset mapping
     for (const issue of sorted) {
-      try {
-        const range = document.createRange();
+      let wrapped = false;
+      for (const node of textNodes) {
+        if (wrapped) break;
+        const tc = node.textContent;
+        const localIdx = tc.indexOf(issue.original);
+        if (localIdx === -1) continue;
 
-        // Calculate the offset within the user text
-        const userTextStart = getGlobalOffset(el, firstTextNode, 0);
-        const issueGlobalStart = userTextStart + issue.idx;
-        const issueGlobalEnd = issueGlobalStart + issue.original.length;
+        // Found the issue text in this text node — split and wrap
+        try {
+          const parent = node.parentNode;
+          if (!parent) continue;
 
-        // Find the start and end nodes/offsets for this range
-        const { node: startNode, offset: startOff } = findNodeAtOffset(el, issueGlobalStart);
-        const { node: endNode, offset: endOff } = findNodeAtOffset(el, issueGlobalEnd);
+          const before = tc.substring(0, localIdx);
+          const problem = tc.substring(localIdx, localIdx + issue.original.length);
+          const after = tc.substring(localIdx + issue.original.length);
 
-        if (!startNode || !endNode) continue;
+          const color = issue.category === "spelling" ? "#dc2626" : issue.category === "grammar" ? "#ea580c" : "#6366f1";
+          const span = document.createElement("span");
+          span.className = "prosepilot-underline";
+          span.dataset.issueId = issue.id;
+          span.textContent = problem;
+          span.style.textDecorationLine = "underline";
+          span.style.textDecorationStyle = "wavy";
+          span.style.textDecorationColor = color;
+          span.style.textUnderlineOffset = "3px";
+          span.style.cursor = "pointer";
+          span.style.background = "rgba(99,102,241,0.06)";
+          span.style.borderRadius = "2px";
+          span.style.padding = "0 1px";
 
-        range.setStart(startNode, startOff);
-        range.setEnd(endNode, endOff);
+          if (before) parent.insertBefore(document.createTextNode(before), node);
+          parent.insertBefore(span, node);
+          if (after) parent.insertBefore(document.createTextNode(after), node);
+          parent.removeChild(node);
 
-        // Check if range is within user text only
-        const rangeText = range.toString();
-        if (rangeText !== issue.original) continue;
+          span.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const iss = issues.find((i) => i.id === span.dataset.issueId);
+            if (iss) showSuggestionPopup(span, iss, el);
+          });
 
-        // Create the underline span
-        const color =
-          issue.category === "spelling"
-            ? "#dc2626"
-            : issue.category === "grammar"
-              ? "#ea580c"
-              : "#6366f1";
-
-        const span = document.createElement("span");
-        span.className = "prosepilot-underline";
-        span.dataset.issueId = issue.id;
-        span.style.textDecorationColor = color;
-        span.style.textDecorationStyle = "wavy";
-        span.style.textUnderlineOffset = "3px";
-        span.style.cursor = "pointer";
-        span.style.background = "rgba(99,102,241,0.06)";
-        span.style.borderRadius = "2px";
-        span.style.padding = "0 1px";
-
-        range.surroundContents(span);
-
-        // Add click handler
-        span.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const iss = issues.find((i) => i.id === span.dataset.issueId);
-          if (iss) showSuggestionPopup(span, iss, el);
-        });
-      } catch (e) {
-        // Range error — skip this issue
+          console.log("[ProsePilot] Underline CREATED:", issue.original, "->", issue.replacement);
+          wrapped = true;
+        } catch (e) {
+          console.warn("[ProsePilot] wrap error:", issue.original, e);
+        }
+      }
+      if (!wrapped) {
+        console.warn("[ProsePilot] Could not find text node containing:", JSON.stringify(issue.original));
       }
     }
   }
 
   function getGlobalOffset(root, targetNode, targetOffset) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    // Use shadow-DOM-aware traversal instead of TreeWalker
     let offset = 0;
-    let node;
-    while ((node = walker.nextNode())) {
-      if (node === targetNode) {
-        return offset + targetOffset;
-      }
+    const textNodes = collectTextNodes(root);
+    for (const node of textNodes) {
+      if (node === targetNode) return offset + targetOffset;
       offset += node.textContent.length;
     }
     return 0;
   }
 
   function findNodeAtOffset(root, targetOffset) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    // Use shadow-DOM-aware traversal instead of TreeWalker
     let offset = 0;
-    let node;
-    while ((node = walker.nextNode())) {
+    const textNodes = collectTextNodes(root);
+    for (const node of textNodes) {
       const nodeEnd = offset + node.textContent.length;
-      if (targetOffset <= nodeEnd) {
-        return { node, offset: targetOffset - offset };
-      }
+      if (targetOffset <= nodeEnd) return { node, offset: targetOffset - offset };
       offset = nodeEnd;
     }
     return { node: null, offset: 0 };
@@ -759,7 +901,8 @@ window.addEventListener("message", (event) => {
     popup.querySelector(".prosepilot-close").addEventListener("click", hidePopup);
     popup.querySelector(".prosepilot-skip").addEventListener("click", () => {
       // Remove the underline span when user skips/dismisses
-      const span = editableEl.querySelector(`.prosepilot-underline[data-issue-id="${issue.id}"]`);
+      const safeId = CSS.escape(String(issue.id));
+      const span = editableEl.querySelector(`.prosepilot-underline[data-issue-id="${safeId}"]`);
       if (span) {
         const parent = span.parentNode;
         parent.replaceChild(document.createTextNode(issue.original), span);
@@ -769,7 +912,8 @@ window.addEventListener("message", (event) => {
     });
     popup.querySelector(".prosepilot-accept").addEventListener("click", async () => {
       // Find the underline span for this issue and replace it directly
-      const span = editableEl.querySelector(`.prosepilot-underline[data-issue-id="${issue.id}"]`);
+      const safeId = CSS.escape(String(issue.id));
+      const span = editableEl.querySelector(`.prosepilot-underline[data-issue-id="${safeId}"]`);
       if (span) {
         const parent = span.parentNode;
         const replacementNode = document.createTextNode(issue.replacement);
@@ -874,6 +1018,9 @@ window.addEventListener("message", (event) => {
     // Stop if extension context is dead
     if (!isExtensionAlive) return;
 
+    // Stop if extension is disabled
+    if (isDisabled) return;
+
     // Respect current mode
     if (currentMode === "none") {
       clearUnderlines(el);
@@ -897,6 +1044,7 @@ window.addEventListener("message", (event) => {
     // Skip if text hasn't changed since last check
     if (lastCheckedText.get(el) === text) return;
 
+    console.log(`[ProsePilot] Checking text (${text.length} chars): "${text.substring(0, 80)}..."`);
     const issues = await checkText(text);
     issueMap.set(el, issues);
     lastCheckedText.set(el, text);
@@ -904,41 +1052,58 @@ window.addEventListener("message", (event) => {
     console.log(`[ProsePilot] Mode: ${currentMode}, Issues found: ${issues.length}`, issues);
 
     if (currentMode === "auto") {
-      // Auto-correct: apply high-confidence fixes silently
-      const autoIssues = issues.filter(
-        (i) => i.confidence >= 0.85 && i.category !== "style" && i.category !== "tone" && i.replacement && i.original !== i.replacement
-      );
-      console.log(`[ProsePilot] Auto-correctable issues: ${autoIssues.length}`, autoIssues);
-      if (autoIssues.length > 0) {
-        let newText = text;
-        // Sort by offset descending (end-to-start) to preserve positions
-        const sorted = [...autoIssues].sort((a, b) => b.startUtf16 - a.startUtf16);
-        for (const issue of sorted) {
-          // Use startUtf16 offset for precise matching (not indexOf which is fragile with duplicates)
-          if (issue.startUtf16 !== null && issue.startUtf16 !== undefined) {
-            const idx = issue.startUtf16;
-            if (idx >= 0 && idx + issue.original.length <= newText.length && newText.substring(idx, idx + issue.original.length) === issue.original) {
-              newText = newText.slice(0, idx) + issue.replacement + newText.slice(idx + issue.original.length);
-            }
-          } else {
-            // Fallback to indexOf if offset not available
-            const idx = newText.indexOf(issue.original);
-            if (idx !== -1) {
-              newText = newText.slice(0, idx) + issue.replacement + newText.slice(idx + issue.original.length);
+      // Auto-correct: textarea/input use full replacement, contentEditable uses surgical replacement
+      if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
+        const autoIssues = issues.filter(
+          (i) => i.confidence >= 0.85 && i.category !== "style" && i.category !== "tone" && i.replacement && i.original !== i.replacement
+        );
+        if (autoIssues.length > 0) {
+          let newText = text;
+          const sorted = [...autoIssues].sort((a, b) => b.startUtf16 - a.startUtf16);
+          for (const issue of sorted) {
+            if (issue.startUtf16 !== null && issue.startUtf16 !== undefined) {
+              const idx = issue.startUtf16;
+              if (idx >= 0 && idx + issue.original.length <= newText.length && newText.substring(idx, idx + issue.original.length) === issue.original) {
+                newText = newText.slice(0, idx) + issue.replacement + newText.slice(idx + issue.original.length);
+              }
+            } else {
+              const idx = newText.indexOf(issue.original);
+              if (idx !== -1) {
+                newText = newText.slice(0, idx) + issue.replacement + newText.slice(idx + issue.original.length);
+              }
             }
           }
+          if (newText !== text) {
+            isAutoCorrecting = true;
+            isRenderingUnderlines = true;
+            setElementText(el, newText);
+            lastCheckedText.set(el, newText);
+            showToast(`✓ ${autoIssues.length} correction${autoIssues.length > 1 ? "s" : ""} applied`);
+            setTimeout(() => { isAutoCorrecting = false; isRenderingUnderlines = false; }, 0);
+            return;
+          }
         }
-        if (newText !== text) {
-          isAutoCorrecting = true;
-          isRenderingUnderlines = true;
-          setElementText(el, newText);
-          // Update lastCheckedText to the corrected text so MutationObserver doesn't re-check
-          lastCheckedText.set(el, newText);
-          showToast(`✓ ${autoIssues.length} correction${autoIssues.length > 1 ? "s" : ""} applied`);
-          // Delay reset flags so MutationObserver callbacks see them as true
-          setTimeout(() => { isAutoCorrecting = false; isRenderingUnderlines = false; }, 0);
+      } else {
+        // contentEditable: surgical replacement (preserves formatting)
+        isAutoCorrecting = true;
+        isRenderingUnderlines = true;
+        const fixed = applyAutoCorrectToContentEditable(el, issues);
+        if (fixed) {
+          lastCheckedText.set(el, getElementText(el));
+          showToast("✓ Corrections applied");
+        }
+        // Show underlines for issues that couldn't be auto-fixed
+        const remaining = issues.filter((i) => i.confidence < 0.85 || i.category === "style" || i.category === "tone" || !i.replacement || i.original === i.replacement);
+        if (remaining.length > 0) {
+          setTimeout(() => {
+            isAutoCorrecting = false;
+            isRenderingUnderlines = false;
+            renderUnderlines(el, remaining);
+          }, 100);
           return;
         }
+        setTimeout(() => { isAutoCorrecting = false; isRenderingUnderlines = false; }, 0);
+        return;
       }
       // Fallback: show underlines for issues that couldn't be auto-applied
       renderUnderlines(el, issues);
@@ -951,7 +1116,13 @@ window.addEventListener("message", (event) => {
   // ==================== ELEMENT OBSERVER ====================
 
   function observeElement(el) {
+    if (monitored.has(el)) return;
     monitored.add(el);
+
+    // Diagnostic: log what the element contains
+    const diagText = el.innerText || el.textContent || "(empty)";
+    const diagLen = diagText.length;
+    console.log(`[ProsePilot] Monitoring ${el.tagName} ce=${el.contentEditable} h=${el.offsetHeight} text="${diagText.substring(0, 60)}" len=${diagLen}`);
 
     el.addEventListener("input", () => triggerCheck(el));
     el.addEventListener("keyup", (e) => {
@@ -960,55 +1131,148 @@ window.addEventListener("message", (event) => {
       }
     });
 
-    // Focus/blur for icon visibility
+    // Focus/blur — just track focused element
     el.addEventListener("focus", () => {
       focusedElement = el;
-      showIcon();
     });
     el.addEventListener("blur", () => {
-      // Delay hide so user can click icon
       setTimeout(() => {
-        if (!popover && document.activeElement === document.body) {
+        if (document.activeElement === document.body) {
           focusedElement = null;
-          hideIcon();
         }
       }, 300);
     });
 
-    // For contentEditable, observe DOM mutations
+    // For contentEditable, observe DOM mutations (but debounce aggressively)
     if (el.contentEditable === "true" || el.contentEditable === "") {
       const observer = new MutationObserver(() => {
         if (!isRenderingUnderlines && !isAutoCorrecting) triggerCheck(el);
       });
       observer.observe(el, { childList: true, subtree: true, characterData: true });
+
+      // KEY FIX: Trigger an initial check after a short delay
+      // This catches text that was already present before the listener was attached
+      setTimeout(() => {
+        if (isDisabled || currentMode === "none") return;
+        const text = getElementText(el);
+        if (text && text.trim().length >= MIN_TEXT_LENGTH && lastCheckedText.get(el) !== text) {
+          triggerCheck(el);
+        }
+      }, 1000);
     }
   }
 
   // ==================== INITIALIZE ====================
 
+  // Detect if an element is an editable text field
+  function isEditable(el) {
+    if (!el || el.nodeType !== 1) return false;
+    const tag = el.tagName;
+    if (tag === "TEXTAREA" || tag === "INPUT") return true;
+    const ce = el.getAttribute("contenteditable");
+    if (ce === "true" || ce === "" || ce === "plaintext-only") return true;
+    if (el.getAttribute("role") === "textbox") return true;
+    return false;
+  }
+
+  // Walk up from target to find the closest editable container
+  function findClosestEditable(target) {
+    let el = target;
+    while (el && el !== document.body && el !== document.documentElement) {
+      if (isEditable(el)) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+
   async function init() {
     injectStyles();
     await loadMode();
-    createFloatingIcon();
-    // Don't show icon until a text field is focused
+
+    // Load cached Clerk token from storage
+    try {
+      const tokenResult = await chrome.storage.local.get("prosepilot_clerk_token");
+      clerkToken = tokenResult.prosepilot_clerk_token || null;
+    } catch (e) { /* ignore */ }
+
+    if (isDisabled) return;
 
     // Find and monitor existing editable elements
-    findEditables().forEach(observeElement);
+    const editables = findEditables();
+    editables.forEach(observeElement);
 
-    // Watch for new editable elements
-    const bodyObserver = new MutationObserver(() => {
+    // Method 2: MutationObserver for new elements
+    bodyObserver = new MutationObserver(() => {
+      if (isDisabled) {
+        if (bodyObserver) { bodyObserver.disconnect(); bodyObserver = null; }
+        return;
+      }
       findEditables().forEach(observeElement);
     });
     bodyObserver.observe(document.body, { childList: true, subtree: true });
 
-    // Listen for mode changes from popup
+    // Method 3: Document-level event delegation (catches shadow DOM elements)
+    // This is the KEY fix for Outlook — shadow DOM elements aren't found by querySelectorAll
+    document.addEventListener("focusin", (e) => {
+      if (isDisabled) return;
+      const editable = findClosestEditable(e.target);
+      if (editable && !monitored.has(editable)) {
+        observeElement(editable);
+        // Trigger a check after a short delay (text may already be present)
+        setTimeout(() => {
+          const text = getElementText(editable);
+          if (text && text.trim().length >= MIN_TEXT_LENGTH) {
+            triggerCheck(editable);
+          }
+        }, 500);
+      }
+    }, true); // Use capture to fire before Outlook's handlers
+
+    // Method 4: Periodic scan as fallback (every 3 seconds)
+    periodicScanIntervalId = setInterval(() => {
+      if (isDisabled) {
+        if (periodicScanIntervalId) { clearInterval(periodicScanIntervalId); periodicScanIntervalId = null; }
+        return;
+      }
+      findEditables().forEach(observeElement);
+      // Also re-scan for elements in shadow DOMs
+      document.querySelectorAll("*").forEach((el) => {
+        if (el.shadowRoot) {
+          el.shadowRoot.querySelectorAll("[contenteditable='true'], [contenteditable=''], textarea, input[type='text']").forEach((shadowEl) => {
+            if (!monitored.has(shadowEl) && isVisible(shadowEl) && isLargeEnough(shadowEl)) {
+              observeElement(shadowEl);
+            }
+          });
+        }
+      });
+    }, 3000);
+
+    // Listen for mode changes and re-enable from popup
     try {
       chrome.runtime.onMessage.addListener((msg) => {
         if (msg.action === "setMode") {
           saveMode(msg.mode);
-          // Clear lastCheckedText so text is re-checked with new mode
           lastCheckedText.delete(focusedElement);
           if (focusedElement) triggerCheck(focusedElement);
+        } else if (msg.action === "enable") {
+          isDisabled = false;
+          chrome.storage.local.remove(DISABLED_KEY);
+          findEditables().forEach(observeElement);
+          showToast("ProsePilot enabled");
+          // Re-check focused element with fresh text
+          if (focusedElement) {
+            lastCheckedText.delete(focusedElement);
+            triggerCheck(focusedElement);
+          }
+        } else if (msg.action === "disable") {
+          isDisabled = true;
+          chrome.storage.local.set({ [DISABLED_KEY]: true });
+          // Clear underlines on ALL monitored elements
+          for (const [el] of issueMap) {
+            clearUnderlines(el);
+          }
+          issueMap.clear();
+          hideIcon();
         }
       });
     } catch (e) {

@@ -122,7 +122,7 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     // Sentence starts with lowercase after period/exclamation/question
     { pattern: /([.!?]\s+)([a-z])/g, replacement: (_m, p1, p2) => p1 + p2.toUpperCase(), category: "grammar", rule: "capitalize_after_period", explanation: "Capitalize the first word of a new sentence." },
     // Sentence start at beginning of text — capitalize first letter
-    { pattern: /^([a-z])/, replacement: (_m: string, letter: string) => letter.toUpperCase(), category: "grammar", rule: "capitalize_sentence_start", explanation: "Capitalize the first word of a sentence." },
+    { pattern: /^([a-z])/g, replacement: (_m: string, letter: string) => letter.toUpperCase(), category: "grammar", rule: "capitalize_sentence_start", explanation: "Capitalize the first word of a sentence." },
     // Product/brand names — Prosepilot → ProsePilot
     { pattern: /\bProsepilot\b/g, replacement: "ProsePilot", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'ProsePilot' should be capitalized correctly." },
     { pattern: /\bGrammarly\b/gi, replacement: "Grammarly", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'Grammarly' should be capitalized correctly." },
@@ -144,7 +144,7 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     // Double spaces
     { pattern: /  +/g, replacement: " ", category: "style", rule: "double_space", explanation: "Remove extra spaces." },
     // Missing period at end of sentence
-    { pattern: /^([A-Z][^.!?}\n"]+)$/m, replacement: "$1.", category: "punctuation", rule: "missing_period", explanation: "Sentences should end with a period." },
+    { pattern: /^([A-Z][^.!?}\n"]+)$/gm, replacement: "$1.", category: "punctuation", rule: "missing_period", explanation: "Sentences should end with a period." },
     // Double punctuation
     { pattern: /\.\./g, replacement: "...", category: "punctuation", rule: "double_period", explanation: "Use an ellipsis (...) not double periods." },
     // Missing comma after introductory/conditional clause
@@ -198,6 +198,8 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
 
       // Compute replacement using the pattern's replacement string/function
       let fixed: string;
+      // Save lastIndex before replace — String.replace() with a global regex resets lastIndex to 0
+      const savedLastIndex = rule.pattern.lastIndex;
       if (typeof rule.replacement === "function") {
         fixed = match[0].replace(rule.pattern, rule.replacement as any);
       } else if (match.length > 1) {
@@ -207,6 +209,8 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
         // No capture groups — use the replacement string directly
         fixed = rule.replacement;
       }
+      // Restore lastIndex after replace (which resets it to 0 for global regexes)
+      rule.pattern.lastIndex = savedLastIndex;
 
       // Only add if the fix actually changes something
       if (fixed && fixed !== match[0]) {

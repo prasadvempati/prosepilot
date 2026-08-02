@@ -335,6 +335,46 @@ export default function App() {
             </div>
           </section>
 
+          {/* Browser Extensions */}
+          <section className="py-24 bg-white">
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+              <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface-50 border border-surface-200 text-sm font-semibold text-ink-700 mb-6">
+                Browser Extensions
+              </span>
+              <h2 className="text-display-lg text-ink-900 mb-4">Write better, everywhere you write</h2>
+              <p className="text-xl text-ink-500 max-w-2xl mx-auto mb-12">
+                Install ProsePilot on Chrome or Edge for real-time grammar checking in Outlook, Gmail, Google Docs, and any website.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <a
+                  href="/prosepilot-extension.zip"
+                  download
+                  className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-brand-500 to-brand-600 text-white rounded-xl font-semibold text-lg shadow-lg shadow-brand-500/25 hover:shadow-xl hover:shadow-brand-500/30 hover:-translate-y-0.5 transition-all"
+                >
+                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15l-5-5 1.41-1.41L11 14.17l7.59-7.59L20 8l-9 9z" fill="currentColor"/>
+                  </svg>
+                  Install for Chrome
+                </a>
+                <a
+                  href="/prosepilot-extension.zip"
+                  download
+                  className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-surface-200 text-ink-700 rounded-xl font-semibold text-lg hover:border-brand-300 hover:bg-brand-50 hover:-translate-y-0.5 transition-all"
+                >
+                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2L2 19.5h20L12 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+                    <circle cx="12" cy="14" r="3" fill="currentColor"/>
+                  </svg>
+                  Install for Edge
+                </a>
+              </div>
+              <p className="mt-6 text-sm text-ink-400">
+                After downloading, open <code className="px-1.5 py-0.5 bg-surface-100 rounded text-ink-600 font-mono text-xs">chrome://extensions</code> (Chrome) or <code className="px-1.5 py-0.5 bg-surface-100 rounded text-ink-600 font-mono text-xs">edge://extensions</code> (Edge), enable Developer mode, and click "Load unpacked".
+              </p>
+            </div>
+          </section>
+
           {/* Privacy */}
           <section className="py-20 bg-surface-50">
             <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">

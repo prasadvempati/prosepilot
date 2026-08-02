@@ -53,12 +53,35 @@
   </div>
   
   <div class="content">
+    <div id="disabledBanner" style="display:none;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px;margin-bottom:12px;text-align:center;">
+      <div style="font-size:13px;font-weight:600;color:#92400e;margin-bottom:8px;">ProsePilot is turned off</div>
+      <button id="reEnableBtn" style="background:#6366f1;color:white;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;">Re-enable ProsePilot</button>
+    </div>
     <div id="status" class="status ready">Ready to check</div>
+    
+    <div id="modeSection" style="margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Grammar Mode</div>
+      <div style="display:flex;gap:4px;">
+        <label style="flex:1;display:flex;align-items:center;gap:4px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;background:#f3f4f6;transition:background 0.15s;" id="mode-auto">
+          <input type="radio" name="grammarMode" value="auto" style="accent-color:#10b981;">
+          <span style="color:#374151;">Auto</span>
+        </label>
+        <label style="flex:1;display:flex;align-items:center;gap:4px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;background:#f3f4f6;transition:background 0.15s;" id="mode-suggest">
+          <input type="radio" name="grammarMode" value="suggest" style="accent-color:#f59e0b;">
+          <span style="color:#374151;">Suggest</span>
+        </label>
+        <label style="flex:1;display:flex;align-items:center;gap:4px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;background:#f3f4f6;transition:background 0.15s;" id="mode-none">
+          <input type="radio" name="grammarMode" value="none" style="accent-color:#ef4444;">
+          <span style="color:#374151;">Off</span>
+        </label>
+      </div>
+    </div>
     
     <button id="checkBtn" class="btn btn-primary">Check Selection</button>
     <button id="acceptAllBtn" class="btn btn-accept-all" style="display:none;">Accept All Fixes</button>
     <button id="signInBtn" class="btn btn-secondary">Sign In</button>
     <button id="settingsBtn" class="btn btn-secondary">Settings</button>
+    <button id="turnOffBtn" class="btn btn-secondary" style="color:#dc2626;margin-top:4px;">Turn off ProsePilot</button>
     
     <div id="loading">Checking grammar...</div>
     <div id="results" class="issues"></div>

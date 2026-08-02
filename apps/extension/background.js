@@ -50,6 +50,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleInjectContentScript(sendResponse);
     return true;
   }
+
+  // Unknown message — respond to prevent "receiving end does not exist" errors
+  sendResponse({ error: "Unknown action: " + (message.action || "none") });
+  return false;
 });
 
 async function handleGetSelection(sendResponse) {
@@ -176,6 +180,7 @@ async function handleApplyFix(original, replacement, sendResponse) {
 
 // --- Inline grammar check (called by content script) ---
 const inlineCache = new Map();
+const INLINE_CACHE_MAX = 500;
 
 async function handleCheckInline(text, sendResponse) {
   try {
@@ -224,6 +229,11 @@ async function handleCheckInline(text, sendResponse) {
 
     // Cache for 60 seconds
     inlineCache.set(cacheKey, issues);
+    if (inlineCache.size > INLINE_CACHE_MAX) {
+      // Evict oldest entry
+      const firstKey = inlineCache.keys().next().value;
+      inlineCache.delete(firstKey);
+    }
     setTimeout(() => inlineCache.delete(cacheKey), 60000);
 
     sendResponse({ issues });

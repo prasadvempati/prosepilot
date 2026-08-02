@@ -50,16 +50,102 @@ window.rejectIssue = function(id) {
   renderIssues();
 };
 
-document.addEventListener("DOMContentLoaded", () => {
-  // Inject content script on popup open (no host_permissions needed)
-  chrome.runtime.sendMessage({ action: "injectContentScript" }, () => {});
-
+document.addEventListener("DOMContentLoaded", async () => {
+  // Check if ProsePilot is disabled
+  const { prosepilot_disabled } = await chrome.storage.local.get("prosepilot_disabled");
+  const disabledBanner = document.getElementById("disabledBanner");
   const checkBtn = document.getElementById("checkBtn");
   const acceptAllBtn = document.getElementById("acceptAllBtn");
   const settingsBtn = document.getElementById("settingsBtn");
+  const signInBtn = document.getElementById("signInBtn");
+  const turnOffBtn = document.getElementById("turnOffBtn");
   const status = document.getElementById("status");
   const loading = document.getElementById("loading");
   const results = document.getElementById("results");
+
+  if (prosepilot_disabled) {
+    disabledBanner.style.display = "block";
+    checkBtn.style.display = "none";
+    signInBtn.style.display = "none";
+    settingsBtn.style.display = "none";
+    turnOffBtn.style.display = "none";
+    status.style.display = "none";
+  }
+
+  // Re-enable button
+  const reEnableBtn = document.getElementById("reEnableBtn");
+  if (reEnableBtn) {
+    reEnableBtn.addEventListener("click", async () => {
+      await chrome.storage.local.remove("prosepilot_disabled");
+      // Tell all content scripts to re-enable
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        try {
+          chrome.tabs.sendMessage(tab.id, { action: "enable" });
+        } catch (e) { /* tab may not have content script */ }
+      }
+      disabledBanner.style.display = "none";
+      checkBtn.style.display = "";
+      signInBtn.style.display = "";
+      settingsBtn.style.display = "";
+      status.style.display = "";
+      status.textContent = "ProsePilot re-enabled!";
+      status.className = "status ready";
+    });
+  }
+
+  // Load current mode and set radio
+  const { prosepilot_grammar_mode } = await chrome.storage.local.get("prosepilot_grammar_mode");
+  const currentModeVal = prosepilot_grammar_mode || "auto";
+  console.log("[ProsePilot Popup] Current mode:", currentModeVal, "stored:", prosepilot_grammar_mode);
+
+  // Set all radios unchecked first, then check the current one
+  document.querySelectorAll('input[name="grammarMode"]').forEach((r) => {
+    r.checked = false;
+    const lbl = r.closest("label");
+    if (lbl) lbl.style.background = "#f3f4f6";
+  });
+
+  const modeRadio = document.querySelector(`input[name="grammarMode"][value="${currentModeVal}"]`);
+  if (modeRadio) {
+    modeRadio.checked = true;
+    const label = modeRadio.closest("label");
+    if (label) {
+      label.style.background = currentModeVal === "auto" ? "#d1fae5" : currentModeVal === "suggest" ? "#fef3c7" : "#fee2e2";
+    }
+    console.log("[ProsePilot Popup] Set radio:", currentModeVal, "checked:", modeRadio.checked);
+  } else {
+    console.warn("[ProsePilot Popup] Radio not found for value:", currentModeVal);
+  }
+
+  // Mode change handler
+  document.querySelectorAll('input[name="grammarMode"]').forEach((radio) => {
+    radio.addEventListener("change", async (e) => {
+      const mode = e.target.value;
+      await chrome.storage.local.set({ prosepilot_grammar_mode: mode });
+      // Highlight selected label, unhighlight others
+      document.querySelectorAll('input[name="grammarMode"]').forEach((r) => {
+        const lbl = r.closest("label");
+        if (lbl) {
+          if (r.checked) {
+            lbl.style.background = mode === "auto" ? "#d1fae5" : mode === "suggest" ? "#fef3c7" : "#fee2e2";
+          } else {
+            lbl.style.background = "#f3f4f6";
+          }
+        }
+      });
+      // Tell all content scripts about the mode change
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        try {
+          chrome.tabs.sendMessage(tab.id, { action: "setMode", mode });
+        } catch (e) { /* tab may not have content script */ }
+      }
+    });
+  });
+
+  // Inject content script on popup open (no host_permissions needed)
+  chrome.runtime.sendMessage({ action: "injectContentScript" }, () => {});
 
   checkBtn.addEventListener("click", async () => {
     status.textContent = "Getting selection...";
@@ -141,7 +227,10 @@ document.addEventListener("DOMContentLoaded", () => {
     acceptAllBtn.textContent = "Applying...";
 
     let applied = 0;
-    for (const issue of pendingIssues) {
+    for (let i = 0; i < pendingIssues.length; i++) {
+      const issue = pendingIssues[i];
+      status.textContent = `Applying fix ${i + 1} of ${pendingIssues.length}...`;
+      status.className = "status info";
       try {
         const result = await applyFix(issue.original, issue.replacement);
         if (result.success) {
@@ -153,20 +242,42 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (err) {
         issue.status = "failed";
       }
+      renderIssues();
     }
 
-    status.textContent = `Applied ${applied} of ${pendingIssues.length} fix(es).`;
+    status.textContent = pendingIssues.length === applied
+      ? "All fixes applied"
+      : `Applied ${applied} of ${pendingIssues.length} fix(es).`;
     status.className = applied > 0 ? "status ready" : "status error";
     acceptAllBtn.style.display = "none";
-    renderIssues();
   });
 
   settingsBtn.addEventListener("click", () => {
     chrome.tabs.create({ url: "https://prosepilot.io" });
   });
 
+  // Turn off ProsePilot
+  if (turnOffBtn) {
+    turnOffBtn.addEventListener("click", async () => {
+      await chrome.storage.local.set({ prosepilot_disabled: true });
+      // Tell all content scripts to disable
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        try {
+          chrome.tabs.sendMessage(tab.id, { action: "disable" });
+        } catch (e) { /* tab may not have content script */ }
+      }
+      disabledBanner.style.display = "block";
+      checkBtn.style.display = "none";
+      signInBtn.style.display = "none";
+      settingsBtn.style.display = "none";
+      turnOffBtn.style.display = "none";
+      status.style.display = "none";
+      results.style.display = "none";
+    });
+  }
+
   // Clerk sign-in: open web app auth page
-  const signInBtn = document.getElementById("signInBtn");
   if (signInBtn) {
     signInBtn.addEventListener("click", () => {
       chrome.tabs.create({ url: "https://prosepilot.io/sign-in" });
@@ -246,6 +357,6 @@ function applyFix(original, replacement) {
 
 function escapeHtml(text) {
   const div = document.createElement("div");
-  div.textContent = text;
+  div.textContent = text == null ? "" : String(text);
   return div.innerHTML;
 }
