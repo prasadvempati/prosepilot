@@ -273,13 +273,23 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
     };
   }
 
-  // Tier 1: LanguageTool (free, self-hosted)
-  const ltIssues = await callLanguageTool(text);
-
-  // Tier 2: DeepSeek for clarity/tone (skip in lightweight mode for speed)
+  // Tier 1: LanguageTool (free, self-hosted) + Tier 2: DeepSeek (clarity/tone/grammar AI pass).
+  // These two calls don't depend on each other's results whenever DeepSeek is going to run
+  // unconditionally (mode "rewrite"/"report"/"review" — which covers every mode the extension's
+  // inline checker and rewrite/report features actually send), so run them in parallel instead
+  // of back-to-back. This is a pure latency win with no change in what gets returned: the only
+  // case that still needs LT's result BEFORE deciding whether to call DeepSeek is the narrower
+  // "call DeepSeek only if LT found something" branch, which is preserved exactly as before.
+  let ltIssues: GrammarIssue[];
   let aiIssues: GrammarIssue[] = [];
-  if (!lightweight && (mode === "rewrite" || mode === "report" || mode === "review" || ltIssues.length > 0)) {
-    aiIssues = await callDeepSeekForIssues(text);
+  const alwaysCallsDeepSeek = !lightweight && (mode === "rewrite" || mode === "report" || mode === "review");
+  if (alwaysCallsDeepSeek) {
+    [ltIssues, aiIssues] = await Promise.all([callLanguageTool(text), callDeepSeekForIssues(text)]);
+  } else {
+    ltIssues = await callLanguageTool(text);
+    if (!lightweight && ltIssues.length > 0) {
+      aiIssues = await callDeepSeekForIssues(text);
+    }
   }
 
   // Merge: rule-based + LT + AI, deduplicate by offset proximity
@@ -317,7 +327,7 @@ Return a JSON array of issues. Each issue must have:
 - "replacement": the suggested fix
 - "confidence": 0.0 to 1.0
 - "severity": "error", "warning", "info", or "suggestion"
-- "explanation": a clear explanation of the issue
+- "explanation": ONE short clause, max ~10 words, stating just why it's wrong (not the fix itself — keep it brief, this is shown in a small popup)
 
 CRITICAL RULES:
 1. The "original" field MUST be an exact substring of the input text — copy it character-for-character

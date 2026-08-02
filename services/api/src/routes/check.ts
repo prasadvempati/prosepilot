@@ -9,7 +9,7 @@ import { verifyRequest } from "../middleware/auth.js";
 export async function checkRoutes(app: FastifyInstance) {
   // POST /v1/check - Grammar, spelling, punctuation, clarity, style issues
   app.post("/v1/check", { preHandler: [verifyRequest] }, async (request, reply) => {
-    const { text, mode = "review", language = "en-US", documentType = "general" } = request.body as any;
+    const { text, mode = "review", language = "en-US", documentType = "general", lightweight = false } = request.body as any;
 
     if (!text || typeof text !== "string") {
       return reply.status(400).send({ error: "TEXT_REQUIRED", message: "Text field is required" });
@@ -62,7 +62,7 @@ export async function checkRoutes(app: FastifyInstance) {
         // Profile fetch failed — continue without profile
       }
 
-      const result = await checkGrammar({ text, mode, language, documentType, voiceProfile });
+      const result = await checkGrammar({ text, mode, language, documentType, voiceProfile, lightweight });
 
       // Record usage (fire-and-forget — don't block the response)
       try {

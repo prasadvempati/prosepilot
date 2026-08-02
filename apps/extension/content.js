@@ -694,12 +694,12 @@ if (!window.__prosepilot_bridge_installed) {
 
   // ==================== GRAMMAR CHECK ====================
 
-  async function checkText(text) {
+  async function checkText(text, lightweight = false) {
     if (!isExtensionAlive) return [];
     return new Promise((resolve) => {
       try {
         chrome.runtime.sendMessage(
-          { action: "checkInline", text, token: clerkToken },
+          { action: "checkInline", text, token: clerkToken, lightweight },
           (response) => {
             if (chrome.runtime.lastError) {
               const msg = chrome.runtime.lastError.message || "";
@@ -1144,21 +1144,46 @@ if (!window.__prosepilot_bridge_installed) {
     // Skip if text hasn't changed since last check
     if (lastCheckedText.get(el) === text) return;
 
-    console.log(`[ProsePilot] Checking text (${text.length} chars): "${text.substring(0, 80)}..."`);
-    const issues = await checkText(text);
+    // Tier-0 fast pass: Auto mode + contentEditable only. Fires a lightweight check (rule
+    // engine + LanguageTool, skips the slower DeepSeek call) so obvious, high-confidence
+    // typos/grammar fixes land in a few hundred ms instead of waiting on the full
+    // multi-second round-trip below. Scoped narrowly on purpose — Suggest mode and
+    // textarea/input elements are untouched, and the full check immediately after this
+    // block runs exactly as it did before, unchanged, picking up anything DeepSeek finds.
+    let text2 = text;
+    if (currentMode === "auto" && el.tagName !== "TEXTAREA" && el.tagName !== "INPUT") {
+      const fastIssues = await checkText(text, true);
+      // Staleness guard: only apply if the live text still matches what we checked.
+      if (fastIssues.length > 0 && getElementText(el) === text2) {
+        isAutoCorrecting = true;
+        isRenderingUnderlines = true;
+        const fixedFast = applyAutoCorrectToContentEditable(el, fastIssues);
+        if (fixedFast) {
+          showToast("✓ Correction applied");
+        }
+        setTimeout(() => { isAutoCorrecting = false; isRenderingUnderlines = false; }, 0);
+        // Re-snapshot so the full check below runs against current (possibly fast-pass
+        // corrected) text rather than the now-stale pre-fix snapshot.
+        text2 = getElementText(el);
+      }
+    }
+
+    console.log(`[ProsePilot] Checking text (${text2.length} chars): "${text2.substring(0, 80)}..."`);
+    const issues = await checkText(text2);
     issueMap.set(el, issues);
-    lastCheckedText.set(el, text);
+    lastCheckedText.set(el, text2);
 
     console.log(`[ProsePilot] Mode: ${currentMode}, Issues found: ${issues.length}`, issues);
 
-    // Staleness guard: `text` above was snapshotted BEFORE the await checkText() network
-    // round-trip. If the user kept typing while that request was in flight, every offset
-    // in `issues` describes positions in text that no longer exists — applying them can
-    // land mid-word (e.g. splitting "table" into "ta.ble") even though the substring check
-    // inside the apply functions happens to pass on short/common fragments. If the live
-    // text has moved on, drop this round's corrections; the next debounced check (which
-    // will fire once typing settles) will re-check the current text correctly.
-    if (currentMode === "auto" && getElementText(el) !== text) {
+    // Staleness guard: `text2` above was snapshotted BEFORE the await checkText() network
+    // round-trip (post fast-pass, for contentEditable in auto mode; otherwise identical to
+    // the original `text`). If the user kept typing while that request was in flight, every
+    // offset in `issues` describes positions in text that no longer exists — applying them
+    // can land mid-word (e.g. splitting "table" into "ta.ble") even though the substring
+    // check inside the apply functions happens to pass on short/common fragments. If the
+    // live text has moved on, drop this round's corrections; the next debounced check
+    // (which will fire once typing settles) will re-check the current text correctly.
+    if (currentMode === "auto" && getElementText(el) !== text2) {
       return;
     }
 
@@ -1169,7 +1194,7 @@ if (!window.__prosepilot_bridge_installed) {
           (i) => i.safeAuto === true && i.confidence >= 0.85 && i.category !== "style" && i.category !== "tone" && i.rule !== "missing_period" && i.replacement && i.original !== i.replacement
         );
         if (autoIssues.length > 0) {
-          let newText = text;
+          let newText = text2;
           const sorted = [...autoIssues].sort((a, b) => b.startUtf16 - a.startUtf16);
           for (const issue of sorted) {
             if (issue.startUtf16 !== null && issue.startUtf16 !== undefined) {
@@ -1184,7 +1209,7 @@ if (!window.__prosepilot_bridge_installed) {
               }
             }
           }
-          if (newText !== text) {
+          if (newText !== text2) {
             isAutoCorrecting = true;
             isRenderingUnderlines = true;
             setElementText(el, newText);

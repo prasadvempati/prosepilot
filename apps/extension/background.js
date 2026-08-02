@@ -42,7 +42,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === "checkInline") {
-    handleCheckInline(message.text, sendResponse);
+    handleCheckInline(message.text, sendResponse, !!message.lightweight);
     return true;
   }
 
@@ -182,10 +182,12 @@ async function handleApplyFix(original, replacement, sendResponse) {
 const inlineCache = new Map();
 const INLINE_CACHE_MAX = 500;
 
-async function handleCheckInline(text, sendResponse) {
+async function handleCheckInline(text, sendResponse, lightweight = false) {
   try {
-    // Cache check — don't re-check same text
-    const cacheKey = text.trim().toLowerCase();
+    // Cache check — don't re-check same text. Namespaced by lightweight/full so a fast
+    // rule+LanguageTool-only result can never be handed back to satisfy a later request
+    // that expects the full DeepSeek-inclusive check for the same text.
+    const cacheKey = (lightweight ? "L:" : "F:") + text.trim().toLowerCase();
     if (inlineCache.has(cacheKey)) {
       sendResponse({ issues: inlineCache.get(cacheKey) });
       return;
@@ -202,7 +204,7 @@ async function handleCheckInline(text, sendResponse) {
       const response = await fetch(`${API_BASE}/v1/check`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ text, mode: "review" }),
+        body: JSON.stringify({ text, mode: "review", lightweight }),
         // DeepSeek round-trips regularly took 2.3-4.5s in testing, right up against the old
         // 5s ceiling — several requests were observed getting aborted at exactly the 5.0s
         // mark, forcing a silent fallback to the much weaker LanguageTool checker even
