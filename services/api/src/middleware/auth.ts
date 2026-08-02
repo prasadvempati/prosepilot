@@ -9,7 +9,7 @@ declare module "fastify" {
 
 export async function verifyRequest(
   request: FastifyRequest,
-  reply: FastifyReply,
+  _reply: FastifyReply,
 ): Promise<void> {
   // Dev mode: skip auth when CLERK_SECRET_KEY is not configured
   if (!process.env.CLERK_SECRET_KEY && process.env.NODE_ENV !== "production") {

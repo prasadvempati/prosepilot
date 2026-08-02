@@ -5,7 +5,7 @@ import { getProfile } from "./voice-profile.js";
 import { verifyRequest } from "../middleware/auth.js";
 
 interface DocxSession {
-  userId: string;
+  userId: string | null;
   clean: Buffer;
   tracked: Buffer;
   created: number;
