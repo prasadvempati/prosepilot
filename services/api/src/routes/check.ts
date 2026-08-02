@@ -26,32 +26,41 @@ export async function checkRoutes(app: FastifyInstance) {
     try {
       const userId = (request as any).auth?.userId || "anonymous";
 
-      // Usage limit enforcement
-      const userRows = await db.select({ id: users.id }).from(users).where(eq(users.clerkId, userId)).limit(1);
-      const CHAR_LIMIT = userRows.length > 0 ? 100000 : 10000;
+      // Usage limit enforcement (gracefully skip if DB unavailable)
+      try {
+        const userRows = await db.select({ id: users.id }).from(users).where(eq(users.clerkId, userId)).limit(1);
+        const effectiveLimit = userRows.length > 0 ? 100000 : 10000;
 
-      const periodStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const usageResult = await db
-        .select({ totalChars: sql<number>`coalesce(sum(${usageEvents.characterCount}), 0)` })
-        .from(usageEvents)
-        .where(
-          userRows.length > 0
-            ? sql`${usageEvents.actorId} = ${userRows[0].id} AND ${usageEvents.createdAt} >= ${periodStart}`
-            : sql`${usageEvents.actorId} IS NULL AND ${usageEvents.createdAt} >= ${periodStart}`
-        );
+        const periodStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const usageResult = await db
+          .select({ totalChars: sql<number>`coalesce(sum(${usageEvents.characterCount}), 0)` })
+          .from(usageEvents)
+          .where(
+            userRows.length > 0
+              ? sql`${usageEvents.actorId} = ${userRows[0].id} AND ${usageEvents.createdAt} >= ${periodStart}`
+              : sql`${usageEvents.actorId} IS NULL AND ${usageEvents.createdAt} >= ${periodStart}`
+          );
 
-      const charsUsed = usageResult[0]?.totalChars || 0;
-      if (charsUsed + text.length > CHAR_LIMIT) {
-        return reply.status(429).send({
-          error: "USAGE_LIMIT_EXCEEDED",
-          message: `Monthly character limit reached. Used ${charsUsed.toLocaleString()} of ${CHAR_LIMIT.toLocaleString()} characters.`,
-          charactersUsed: charsUsed,
-          charactersLimit: CHAR_LIMIT,
-        });
+        const charsUsed = usageResult[0]?.totalChars || 0;
+        if (charsUsed + text.length > effectiveLimit) {
+          return reply.status(429).send({
+            error: "USAGE_LIMIT_EXCEEDED",
+            message: `Monthly character limit reached. Used ${charsUsed.toLocaleString()} of ${effectiveLimit.toLocaleString()} characters.`,
+            charactersUsed: charsUsed,
+            charactersLimit: effectiveLimit,
+          });
+        }
+      } catch {
+        // DB unavailable — skip usage tracking, allow request through
       }
 
       // Use local voice profile if available
-      const voiceProfile = await getProfile(userId);
+      let voiceProfile = null;
+      try {
+        voiceProfile = await getProfile(userId);
+      } catch {
+        // Profile fetch failed — continue without profile
+      }
 
       const result = await checkGrammar({ text, mode, language, documentType, voiceProfile });
 
@@ -96,28 +105,32 @@ export async function checkRoutes(app: FastifyInstance) {
     try {
       const userId = (request as any).auth?.userId || "anonymous";
 
-      // Usage limit enforcement
-      const userRows = await db.select({ id: users.id }).from(users).where(eq(users.clerkId, userId)).limit(1);
-      const CHAR_LIMIT = userRows.length > 0 ? 100000 : 10000;
+      // Usage limit enforcement (gracefully skip if DB unavailable)
+      try {
+        const userRows = await db.select({ id: users.id }).from(users).where(eq(users.clerkId, userId)).limit(1);
+        const effectiveLimit = userRows.length > 0 ? 100000 : 10000;
 
-      const periodStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const usageResult = await db
-        .select({ totalChars: sql<number>`coalesce(sum(${usageEvents.characterCount}), 0)` })
-        .from(usageEvents)
-        .where(
-          userRows.length > 0
-            ? sql`${usageEvents.actorId} = ${userRows[0].id} AND ${usageEvents.createdAt} >= ${periodStart}`
-            : sql`${usageEvents.actorId} IS NULL AND ${usageEvents.createdAt} >= ${periodStart}`
-        );
+        const periodStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const usageResult = await db
+          .select({ totalChars: sql<number>`coalesce(sum(${usageEvents.characterCount}), 0)` })
+          .from(usageEvents)
+          .where(
+            userRows.length > 0
+              ? sql`${usageEvents.actorId} = ${userRows[0].id} AND ${usageEvents.createdAt} >= ${periodStart}`
+              : sql`${usageEvents.actorId} IS NULL AND ${usageEvents.createdAt} >= ${periodStart}`
+          );
 
-      const charsUsed = usageResult[0]?.totalChars || 0;
-      if (charsUsed + text.length > CHAR_LIMIT) {
-        return reply.status(429).send({
-          error: "USAGE_LIMIT_EXCEEDED",
-          message: `Monthly character limit reached. Used ${charsUsed.toLocaleString()} of ${CHAR_LIMIT.toLocaleString()} characters.`,
-          charactersUsed: charsUsed,
-          charactersLimit: CHAR_LIMIT,
-        });
+        const charsUsed = usageResult[0]?.totalChars || 0;
+        if (charsUsed + text.length > effectiveLimit) {
+          return reply.status(429).send({
+            error: "USAGE_LIMIT_EXCEEDED",
+            message: `Monthly character limit reached. Used ${charsUsed.toLocaleString()} of ${effectiveLimit.toLocaleString()} characters.`,
+            charactersUsed: charsUsed,
+            charactersLimit: effectiveLimit,
+          });
+        }
+      } catch {
+        // DB unavailable — skip usage tracking, allow request through
       }
 
       const result = await rewriteText({ text, tone, customInstruction, length, language });
