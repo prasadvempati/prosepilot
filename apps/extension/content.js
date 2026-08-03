@@ -36,6 +36,23 @@ if (!window.__prosepilot_bridge_installed) {
   const DISABLED_KEY = "prosepilot_disabled";
   const MAX_CHECK_LENGTH = 100000; // 100K chars max per grammar check
 
+  // Tones the /v1/rewrite backend accepts (mirrors RewriteTone in packages/writing-core/src/types.ts,
+  // minus "custom" — custom instructions need a text input, left for a later iteration).
+  const REWRITE_TONES = [
+    { id: "professional", label: "Professional", desc: "Clear and polished for work" },
+    { id: "concise", label: "Concise", desc: "Trim it down to the essentials" },
+    { id: "diplomatic", label: "Diplomatic", desc: "Soften a sensitive message" },
+    { id: "friendly", label: "Friendly", desc: "Warm and approachable" },
+    { id: "firm", label: "Firm", desc: "Direct, no room for pushback" },
+    { id: "formal", label: "Formal", desc: "Buttoned-up, no contractions" },
+    { id: "confident", label: "Confident", desc: "Assertive, decisive tone" },
+    { id: "persuasive", label: "Persuasive", desc: "Make the case more compelling" },
+    { id: "empathetic", label: "Empathetic", desc: "Lead with understanding" },
+    { id: "casual", label: "Casual", desc: "Relaxed, conversational" },
+    { id: "affirmative", label: "Affirmative", desc: "Lean positive and encouraging" },
+    { id: "executive", label: "Executive", desc: "Short, high-level summary tone" },
+  ];
+
   // Skip grammar-check UI on ProsePilot's own site
   if (window.location.hostname.includes("prosepilot.io")) return;
 
@@ -94,8 +111,11 @@ if (!window.__prosepilot_bridge_installed) {
 
   let floatingIcon = null;
   let popover = null;
+  let rewritePopover = null;
   let pulseCount = 0;
   let pulseTimerId = null;
+  // Guards against firing a second rewrite request while one is already in flight
+  let rewriteInFlight = false;
 
   function createFloatingIcon() {
     if (floatingIcon) return;
@@ -227,6 +247,21 @@ if (!window.__prosepilot_bridge_installed) {
         </div>
         ${modesHtml}
         <div style="border-top:1px solid #e5e7eb;margin:4px 0;"></div>
+        <div class="prosepilot-mode-option" id="prosepilot-rewrite-open" style="
+          display:flex;align-items:center;gap:10px;padding:10px 12px;
+          border-radius:8px;cursor:pointer;transition:background 0.15s;
+        ">
+          <div style="
+            width:10px;height:10px;flex-shrink:0;
+            display:flex;align-items:center;justify-content:center;
+            font-size:12px;line-height:1;
+          ">&#10024;</div>
+          <div>
+            <div style="font-size:13px;font-weight:500;color:#1f2937;">Rewrite with AI</div>
+            <div style="font-size:11px;color:#6b7280;">Change tone: professional, concise, diplomatic...</div>
+          </div>
+        </div>
+        <div style="border-top:1px solid #e5e7eb;margin:4px 0;"></div>
         <div class="prosepilot-mode-option" id="prosepilot-turnoff" style="
           display:flex;align-items:center;gap:10px;padding:10px 12px;
           border-radius:8px;cursor:pointer;transition:background 0.15s;
@@ -273,6 +308,22 @@ if (!window.__prosepilot_bridge_installed) {
       });
     });
 
+    // Open the rewrite tone picker
+    const rewriteOpenBtn = popover.querySelector("#prosepilot-rewrite-open");
+    if (rewriteOpenBtn) {
+      rewriteOpenBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!focusedElement) {
+          showToast("Click into a text field first, then try Rewrite.", "info");
+          return;
+        }
+        closePopover();
+        openRewritePopover();
+      });
+      rewriteOpenBtn.addEventListener("mouseenter", () => { rewriteOpenBtn.style.background = "#f3f4f6"; });
+      rewriteOpenBtn.addEventListener("mouseleave", () => { rewriteOpenBtn.style.background = "transparent"; });
+    }
+
     // Turn off ProsePilot
     const turnOffBtn = popover.querySelector("#prosepilot-turnoff");
     if (turnOffBtn) {
@@ -305,6 +356,219 @@ if (!window.__prosepilot_bridge_installed) {
     if (popover && !popover.contains(e.target)) {
       closePopover();
     }
+  }
+
+  // ==================== REWRITE (TONE PICKER + PREVIEW) ====================
+
+  function openRewritePopover() {
+    closeRewritePopover();
+
+    rewritePopover = document.createElement("div");
+    rewritePopover.id = "prosepilot-rewrite-popover";
+
+    const tonesHtml = REWRITE_TONES
+      .map(
+        (t) => `
+      <div class="prosepilot-rewrite-tone" data-tone="${t.id}" style="
+        display:flex;align-items:center;gap:10px;padding:9px 12px;
+        border-radius:8px;cursor:pointer;transition:background 0.15s;
+      ">
+        <div>
+          <div style="font-size:13px;font-weight:500;color:#1f2937;">${t.label}</div>
+          <div style="font-size:11px;color:#6b7280;">${t.desc}</div>
+        </div>
+      </div>
+    `
+      )
+      .join("");
+
+    rewritePopover.innerHTML = `
+      <div style="
+        position:fixed;bottom:80px;right:24px;z-index:2147483647;
+        background:white;border:1px solid #e5e7eb;border-radius:12px;
+        padding:8px;box-shadow:0 8px 30px rgba(0,0,0,0.12);
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+        width:240px;max-height:70vh;overflow-y:auto;
+        animation:prosepilot-popover-in 0.2s cubic-bezier(0.34,1.56,0.64,1);
+      ">
+        <div class="prosepilot-rewrite-back" style="
+          display:flex;align-items:center;gap:6px;padding:8px 12px;margin-bottom:2px;
+          border-radius:8px;cursor:pointer;color:#6366f1;font-size:12px;font-weight:600;
+        ">&larr; Back</div>
+        <div style="padding:2px 12px 6px;font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">
+          Rewrite tone
+        </div>
+        ${tonesHtml}
+      </div>
+    `;
+
+    document.body.appendChild(rewritePopover);
+
+    const backBtn = rewritePopover.querySelector(".prosepilot-rewrite-back");
+    backBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeRewritePopover();
+      openPopover();
+    });
+    backBtn.addEventListener("mouseenter", () => { backBtn.style.background = "#f3f4f6"; });
+    backBtn.addEventListener("mouseleave", () => { backBtn.style.background = "transparent"; });
+
+    rewritePopover.querySelectorAll(".prosepilot-rewrite-tone").forEach((opt) => {
+      opt.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const tone = opt.dataset.tone;
+        closeRewritePopover();
+        startRewrite(tone);
+      });
+      opt.addEventListener("mouseenter", () => { opt.style.background = "#f3f4f6"; });
+      opt.addEventListener("mouseleave", () => { opt.style.background = "transparent"; });
+    });
+
+    document.addEventListener("click", closeRewritePopoverOnOutside);
+  }
+
+  function closeRewritePopover() {
+    if (rewritePopover) {
+      rewritePopover.remove();
+      rewritePopover = null;
+      document.removeEventListener("click", closeRewritePopoverOnOutside);
+    }
+  }
+
+  function closeRewritePopoverOnOutside(e) {
+    if (rewritePopover && !rewritePopover.contains(e.target)) {
+      closeRewritePopover();
+    }
+  }
+
+  async function startRewrite(tone) {
+    if (rewriteInFlight) return;
+    const el = focusedElement;
+    if (!el) {
+      showToast("Click into a text field first, then try Rewrite.", "info");
+      return;
+    }
+
+    const text = getElementText(el);
+    if (!text || text.trim().length < MIN_TEXT_LENGTH) {
+      showToast("Write a bit more before rewriting.", "info");
+      return;
+    }
+
+    rewriteInFlight = true;
+    showToast("Rewriting...", "info");
+
+    const response = await rewriteTextRequest(text, tone);
+
+    rewriteInFlight = false;
+
+    if (!response || response.error) {
+      showToast(response?.error || "Rewrite failed. Please try again.", "error");
+      return;
+    }
+
+    showRewritePreview(el, tone, response);
+  }
+
+  async function rewriteTextRequest(text, tone) {
+    if (!isExtensionAlive) return { error: "Extension not available. Please reload the page." };
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage(
+          { action: "rewriteText", text, tone, token: clerkToken },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              const msg = chrome.runtime.lastError.message || "";
+              if (msg.includes("Extension context invalidated") || msg.includes("Receiving end does not exist")) {
+                isExtensionAlive = false;
+                resolve({ error: "Extension was reloaded — please refresh this page." });
+                return;
+              }
+              resolve({ error: "Rewrite failed. Please try again." });
+              return;
+            }
+            resolve(response || { error: "No response from ProsePilot." });
+          }
+        );
+      } catch (e) {
+        isExtensionAlive = false;
+        resolve({ error: "Extension not available. Please reload the page." });
+      }
+    });
+  }
+
+  function showRewritePreview(el, tone, response) {
+    hidePopup();
+
+    const result = response.result;
+    if (!result || typeof result.rewritten !== "string") {
+      showToast("Rewrite failed. Please try again.", "error");
+      return;
+    }
+
+    const toneLabel = (REWRITE_TONES.find((t) => t.id === tone) || {}).label || tone;
+    const warningHtml = result.factMismatch
+      ? `<div style="
+          background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;
+          border-radius:8px;padding:8px 10px;font-size:11px;margin-bottom:10px;line-height:1.4;
+        ">&#9888; This rewrite may have changed a name, date, or number. Review carefully before applying.</div>`
+      : "";
+
+    const popup = document.createElement("div");
+    popup.className = "prosepilot-popup";
+    popup.innerHTML = `
+      <div style="
+        position:fixed;z-index:2147483647;
+        background:white;border:1px solid #e5e7eb;border-radius:10px;
+        padding:14px;box-shadow:0 8px 30px rgba(0,0,0,0.15);
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+        font-size:13px;width:360px;max-height:70vh;
+        bottom:80px;right:24px;
+        display:flex;flex-direction:column;
+      ">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-shrink:0;">
+          <span style="color:#6366f1;font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:0.5px;">Rewrite &middot; ${escapeHtml(toneLabel)}</span>
+          <button class="prosepilot-close" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:18px;padding:0;line-height:1;">&times;</button>
+        </div>
+        ${warningHtml}
+        <div style="
+          overflow-y:auto;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;
+          padding:10px;margin-bottom:10px;white-space:pre-wrap;line-height:1.5;color:#065f46;
+        ">${escapeHtml(result.rewritten)}</div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="prosepilot-rewrite-apply" style="
+            flex:1;padding:8px 12px;border:none;border-radius:6px;
+            background:#059669;color:white;font-size:12px;font-weight:500;cursor:pointer;
+          ">Apply</button>
+          <button class="prosepilot-rewrite-discard" style="
+            flex:1;padding:8px 12px;border:none;border-radius:6px;
+            background:#f3f4f6;color:#374151;font-size:12px;font-weight:500;cursor:pointer;
+          ">Discard</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(popup);
+    activePopup = popup;
+
+    popup.querySelector(".prosepilot-close").addEventListener("click", hidePopup);
+    popup.querySelector(".prosepilot-rewrite-discard").addEventListener("click", hidePopup);
+    popup.querySelector(".prosepilot-rewrite-apply").addEventListener("click", () => {
+      setElementText(el, result.rewritten);
+      lastCheckedText.set(el, result.rewritten);
+      hidePopup();
+      showToast("✓ Rewrite applied");
+      // Re-check the new text so any remaining grammar issues still get flagged
+      setTimeout(() => triggerCheck(el), 300);
+    });
+
+    setTimeout(() => {
+      document.addEventListener("click", (e) => {
+        if (activePopup && !activePopup.contains(e.target)) {
+          hidePopup();
+        }
+      }, { once: true });
+    }, 10);
   }
 
   // ==================== INJECT ANIMATIONS ====================

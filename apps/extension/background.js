@@ -46,6 +46,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "rewriteText") {
+    handleRewriteText(message.text, message.tone, sendResponse);
+    return true;
+  }
+
   if (message.action === "injectContentScript") {
     handleInjectContentScript(sendResponse);
     return true;
@@ -256,6 +261,43 @@ async function handleCheckInline(text, sendResponse, lightweight = false) {
     sendResponse({ issues });
   } catch (err) {
     sendResponse({ issues: [] });
+  }
+}
+
+// --- Rewrite (called by content script's "Rewrite with AI" tone picker) ---
+// Unlike handleCheckInline, this has no LanguageTool fallback (LT doesn't do rewrites) and
+// no cache — a rewrite is a deliberate, user-initiated one-off action, not a per-keystroke
+// check, so there's no repeat-request volume worth caching and no stale-result risk to avoid.
+async function handleRewriteText(text, tone, sendResponse) {
+  try {
+    const { clerkToken } = await chrome.storage.local.get("clerkToken");
+    const headers = { "Content-Type": "application/json" };
+    if (clerkToken) headers["Authorization"] = `Bearer ${clerkToken}`;
+
+    const response = await fetch(`${API_BASE}/v1/rewrite`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ text, tone }),
+      // Rewrite does a full-text DeepSeek pass plus fact-protection validation, so it's
+      // typically slower than a grammar check — give it more headroom than checkInline's 15s.
+      signal: AbortSignal.timeout(25000),
+    });
+
+    if (!response.ok) {
+      let message = "Rewrite failed. Please try again.";
+      try {
+        const errBody = await response.json();
+        if (errBody?.message) message = errBody.message;
+      } catch (e) { /* non-JSON error body — use default message */ }
+      sendResponse({ error: message });
+      return;
+    }
+
+    const data = await response.json();
+    sendResponse({ result: data.result, usage: data.usage });
+  } catch (err) {
+    const isTimeout = err?.name === "TimeoutError" || err?.name === "AbortError";
+    sendResponse({ error: isTimeout ? "Rewrite timed out. Please try again." : "Rewrite failed. Please check your connection." });
   }
 }
 
