@@ -24,7 +24,7 @@
 import type { GrammarIssue } from "@prosepilot/writing-core";
 import { computeHash } from "@prosepilot/writing-core";
 import { randomUUID } from "crypto";
-import { diffWords } from "diff";
+import { diffWordsWithSpace } from "diff";
 
 const MODEL_ID = "Xenova/grammar-synthesis-small";
 
@@ -111,7 +111,17 @@ function classify(original: string, replacement: string): Classification {
 function diffToIssues(original: string, corrected: string, sourceHash: string): GrammarIssue[] {
   if (original === corrected) return [];
 
-  const parts = diffWords(original, corrected);
+  // Must use diffWordsWithSpace, NOT diffWords. diffWords ignores whitespace when
+  // comparing (by design, for readable diffs) — but the model's generated output almost
+  // never preserves the original's exact leading/trailing whitespace (Outlook compose
+  // boxes commonly start with a leading newline). With plain diffWords, that dropped
+  // whitespace silently fails to advance originalOffset, so every offset computed after
+  // it is wrong by however many whitespace characters were trimmed — e.g. reporting
+  // "has" at index 2 when it's really at index 4. diffWordsWithSpace treats whitespace
+  // as a real, counted token, so offsets stay exact. (Found via a live case where this
+  // tier and the rule engine both flagged the same "has"->"have" fix but at different
+  // startUtf16 values, which also defeated the merge step's exact-position dedup.)
+  const parts = diffWordsWithSpace(original, corrected);
   const issues: GrammarIssue[] = [];
   let originalOffset = 0;
 
