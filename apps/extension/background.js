@@ -278,9 +278,12 @@ async function handleRewriteText(text, tone, sendResponse) {
       method: "POST",
       headers,
       body: JSON.stringify({ text, tone }),
-      // Rewrite does a full-text DeepSeek pass plus fact-protection validation, so it's
-      // typically slower than a grammar check — give it more headroom than checkInline's 15s.
-      signal: AbortSignal.timeout(25000),
+      // Must stay LONGER than the server's own DeepSeek call timeout (30s, see
+      // callDeepSeek's AbortSignal.timeout in services/api/src/engine/grammar.ts) — otherwise
+      // this client-side abort fires first on a normal-but-slow response, killing a request
+      // the server would have completed or failed on its own terms a few seconds later, and
+      // showing a false "timed out" error. 35s gives the server's 30s room to actually finish.
+      signal: AbortSignal.timeout(35000),
     });
 
     if (!response.ok) {
