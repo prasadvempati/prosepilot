@@ -62,6 +62,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const status = document.getElementById("status");
   const loading = document.getElementById("loading");
   const results = document.getElementById("results");
+  const rewriteSection = document.getElementById("rewriteSection");
+  const rewriteBtn = document.getElementById("rewriteBtn");
+  const rewriteTone = document.getElementById("rewriteTone");
+  const rewritePreview = document.getElementById("rewritePreview");
 
   if (prosepilot_disabled) {
     disabledBanner.style.display = "block";
@@ -70,6 +74,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     settingsBtn.style.display = "none";
     turnOffBtn.style.display = "none";
     status.style.display = "none";
+    if (rewriteSection) rewriteSection.style.display = "none";
   }
 
   // Re-enable button
@@ -89,6 +94,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       signInBtn.style.display = "";
       settingsBtn.style.display = "";
       status.style.display = "";
+      if (rewriteSection) rewriteSection.style.display = "";
       status.textContent = "ProsePilot re-enabled!";
       status.className = "status ready";
     });
@@ -219,6 +225,106 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  if (rewriteBtn) {
+    rewriteBtn.addEventListener("click", async () => {
+      status.textContent = "Getting selection...";
+      status.className = "status ready";
+      rewritePreview.style.display = "none";
+      rewritePreview.innerHTML = "";
+
+      try {
+        const text = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({ action: "getSelection" }, (response) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+              return;
+            }
+            if (response && response.error) {
+              reject(new Error(response.error));
+              return;
+            }
+            resolve(response?.text || "");
+          });
+        });
+
+        if (!text || text.trim().length === 0) {
+          status.textContent = "No text selected. Select text first.";
+          status.className = "status error";
+          return;
+        }
+
+        const tone = rewriteTone.value;
+        status.textContent = "Rewriting...";
+        status.className = "status info";
+        rewriteBtn.disabled = true;
+
+        const response = await new Promise((resolve) => {
+          chrome.runtime.sendMessage({ action: "rewriteText", text, tone }, (res) => {
+            if (chrome.runtime.lastError) {
+              resolve({ error: chrome.runtime.lastError.message });
+              return;
+            }
+            resolve(res || { error: "No response from ProsePilot." });
+          });
+        });
+
+        rewriteBtn.disabled = false;
+
+        if (!response || response.error || !response.result || typeof response.result.rewritten !== "string") {
+          status.textContent = (response && response.error) || "Rewrite failed. Please try again.";
+          status.className = "status error";
+          return;
+        }
+
+        const result = response.result;
+        status.textContent = "Review the rewrite below";
+        status.className = "status info";
+
+        const warningHtml = result.factMismatch
+          ? `<div style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:6px;padding:8px 10px;font-size:11px;margin-bottom:8px;line-height:1.4;">This rewrite may have changed a name, date, or number. Review carefully before applying.</div>`
+          : "";
+
+        rewritePreview.style.display = "block";
+        rewritePreview.innerHTML = `
+          ${warningHtml}
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px;margin-bottom:8px;white-space:pre-wrap;font-size:13px;line-height:1.5;color:#065f46;max-height:220px;overflow-y:auto;">${escapeHtml(result.rewritten)}</div>
+          <div style="display:flex;gap:6px;">
+            <button id="rewriteApplyBtn" style="flex:1;padding:8px 10px;border:none;border-radius:6px;background:#059669;color:white;font-size:12px;font-weight:500;cursor:pointer;">Apply</button>
+            <button id="rewriteDiscardBtn" style="flex:1;padding:8px 10px;border:none;border-radius:6px;background:#f3f4f6;color:#374151;font-size:12px;font-weight:500;cursor:pointer;">Discard</button>
+          </div>
+        `;
+
+        document.getElementById("rewriteApplyBtn").addEventListener("click", async () => {
+          try {
+            const applyResult = await applyFix(text, result.rewritten);
+            if (applyResult.success) {
+              status.textContent = "Rewrite applied.";
+              status.className = "status ready";
+              rewritePreview.style.display = "none";
+              rewritePreview.innerHTML = "";
+            } else {
+              status.textContent = "Could not apply rewrite: " + (applyResult.reason || "selection may have changed");
+              status.className = "status error";
+            }
+          } catch (err) {
+            status.textContent = "Error applying rewrite: " + err.message;
+            status.className = "status error";
+          }
+        });
+        document.getElementById("rewriteDiscardBtn").addEventListener("click", () => {
+          rewritePreview.style.display = "none";
+          rewritePreview.innerHTML = "";
+          status.textContent = "Rewrite discarded.";
+          status.className = "status info";
+        });
+      } catch (err) {
+        rewriteBtn.disabled = false;
+        status.textContent = "Error: " + err.message;
+        status.className = "status error";
+      }
+    });
+  }
+
   acceptAllBtn.addEventListener("click", async () => {
     const pendingIssues = currentIssues.filter(i => i.status === "pending");
     if (pendingIssues.length === 0) return;
@@ -274,6 +380,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       turnOffBtn.style.display = "none";
       status.style.display = "none";
       results.style.display = "none";
+      if (rewriteSection) rewriteSection.style.display = "none";
     });
   }
 

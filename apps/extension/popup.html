@@ -18,6 +18,9 @@
     .btn-primary:hover { background: #4f46e5; }
     .btn-secondary { background: #f3f4f6; color: #374151; margin-top: 8px; }
     .btn-secondary:hover { background: #e5e7eb; }
+    .btn-rewrite { background: #8b5cf6; color: white; margin-top: 8px; }
+    .btn-rewrite:hover { background: #7c3aed; }
+    .btn-rewrite:disabled { opacity: 0.6; cursor: not-allowed; }
     .btn-accept-all { background: #059669; color: white; margin-top: 8px; }
     .btn-accept-all:hover { background: #047857; }
     .issues { margin-top: 12px; }
@@ -79,6 +82,27 @@
     
     <button id="checkBtn" class="btn btn-primary">Check Selection</button>
     <button id="acceptAllBtn" class="btn btn-accept-all" style="display:none;">Accept All Fixes</button>
+
+    <div id="rewriteSection" style="margin-top:12px;">
+      <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Rewrite Tone</div>
+      <select id="rewriteTone" style="width:100%;padding:8px;border-radius:6px;border:1px solid #e5e7eb;font-size:13px;background:white;">
+        <option value="professional">Professional</option>
+        <option value="concise">Concise</option>
+        <option value="diplomatic">Diplomatic</option>
+        <option value="friendly">Friendly</option>
+        <option value="firm">Firm</option>
+        <option value="formal">Formal</option>
+        <option value="confident">Confident</option>
+        <option value="persuasive">Persuasive</option>
+        <option value="empathetic">Empathetic</option>
+        <option value="casual">Casual</option>
+        <option value="affirmative">Affirmative</option>
+        <option value="executive">Executive</option>
+      </select>
+      <button id="rewriteBtn" class="btn btn-rewrite">Rewrite Selection</button>
+      <div id="rewritePreview" style="display:none;margin-top:10px;"></div>
+    </div>
+
     <button id="signInBtn" class="btn btn-secondary">Sign In</button>
     <button id="settingsBtn" class="btn btn-secondary">Settings</button>
     <button id="turnOffBtn" class="btn btn-secondary" style="color:#dc2626;margin-top:4px;">Turn off ProsePilot</button>
