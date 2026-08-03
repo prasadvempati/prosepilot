@@ -1,27 +1,25 @@
-// Local (in-process) small-model grammar tier — prototype, NOT wired into the live
-// /v1/check pipeline yet. See conversation notes: this is Stage 2 of the "improve
-// speed the way Grammarly does, without copying their tech" plan — using an existing
-// small pretrained open-source model (Xenova/grammar-synthesis-small, T5-small based,
-// ONNX, via @huggingface/transformers) instead of training anything ourselves.
+// Local (in-process) small-model grammar tier — Stage 2 of the "improve speed the way
+// Grammarly does, without copying their tech" plan: using an existing small pretrained
+// open-source model (Xenova/grammar-synthesis-small, T5-small based, ONNX, via
+// @huggingface/transformers) instead of training anything ourselves.
 //
-// CRITICAL SAFETY NOTE — read before wiring this into checkGrammar():
+// CRITICAL SAFETY NOTE:
 // This model returns a full rewritten sentence, not a list of issues. Validated testing
 // showed it sometimes hallucinates — e.g. it once "corrected" "The tenant have not paid
-// rent" into "The landlord has not paid the rent", silently swapping tenant for landlord.
-// That is unacceptable to auto-apply in a leasing/property-management tool. This module
-// therefore NEVER trusts the model's output directly. It diffs the model's output against
-// the original text word-by-word and only marks a change safeAuto:true if it matches a
-// narrow, defensible "this is definitely just a grammar/spelling fix" pattern:
+// rent" into "The landlord has not paid the rent", silently swapping tenant for landlord,
+// and on another test it turned "a book" into "an ice cream" on repeated/redundant input.
+// That is unacceptable in a leasing/property-management tool, whether auto-applied or
+// merely suggested. This module therefore NEVER trusts the model's output directly. It
+// diffs the model's output against the original text word-by-word and ONLY returns a
+// change at all if it matches a narrow, defensible "this is definitely just a grammar/
+// spelling fix" pattern:
 //   1. A closed-class verb/article agreement swap (has/have/had, is/are/was/were, a/an, etc.)
 //   2. A short edit-distance spelling fix (same starting letter, small Damerau-Levenshtein
 //      distance) — catches "wen"->"when", "teh"->"the", "offical"->"official", etc.
 // Anything else (a real word substituted for a different word, an insertion, a deletion)
-// is still returned as an issue, but with safeAuto:false, confidence lowered, so it only
-// ever surfaces as a review-first suggestion — exactly like DeepSeek's issues today.
-//
-// This mirrors why DeepSeek issues are always safeAuto:false server-side: AI-sourced
-// rewrites can be wrong, and only deterministic, narrowly-scoped changes get to bypass
-// human review in Auto mode.
+// is silently dropped — not returned as a suggestion, not shown to the user at all. DeepSeek
+// already covers the "worth a second look" suggestion tier more reliably; this model is only
+// trusted for its narrow, high-confidence auto-apply fixes.
 
 import type { GrammarIssue } from "@prosepilot/writing-core";
 import { computeHash } from "@prosepilot/writing-core";
@@ -107,8 +105,9 @@ function classify(original: string, replacement: string): Classification {
 
 /** Diff the model's rewritten sentence against the original, and turn each changed
  * span into a GrammarIssue with a correct startUtf16/endUtf16 into the ORIGINAL text.
- * Only spans that pass classify() as "safe" get safeAuto:true; everything else is
- * still surfaced (for Suggest mode / review), just never auto-applied. */
+ * Only spans that pass classify() as "safe" are returned at all — anything the model
+ * isn't confident about is dropped entirely rather than surfaced as a suggestion (see
+ * inline comment below for why). */
 function diffToIssues(original: string, corrected: string, sourceHash: string): GrammarIssue[] {
   if (original === corrected) return [];
 
@@ -137,44 +136,35 @@ function diffToIssues(original: string, corrected: string, sourceHash: string): 
 
       const fromTrim = removedText.trim();
       const toTrim = addedText.trim();
-      if (!fromTrim) continue; // pure whitespace change — not worth surfacing
+      if (!fromTrim || !toTrim) continue; // pure whitespace change or deletion — not worth surfacing
 
-      const { safe, reason } = toTrim ? classify(fromTrim, toTrim) : { safe: false, reason: "deletion" };
+      const { safe, reason } = classify(fromTrim, toTrim);
+      // Only ever surface the model's high-confidence, narrowly-scoped fixes. Anything it's
+      // NOT sure about gets silently dropped rather than shown as a suggestion — testing
+      // showed this small model can hallucinate wildly on edge cases (e.g. "a book" ->
+      // "an ice cream" on repeated/redundant input), and DeepSeek already covers the
+      // "worth a second look" suggestion tier more reliably. Better to say nothing than
+      // to show a nonsensical suggestion that erodes trust in the tool, even if it's
+      // technically never auto-applied.
+      if (!safe) continue;
 
       issues.push({
         id: `local_${randomUUID().slice(0, 8)}`,
         category: "grammar",
-        rule: safe ? "local_model_safe_fix" : "local_model_suggestion",
+        rule: "local_model_safe_fix",
         startUtf16: start,
         endUtf16: end,
         original: removedText,
-        replacement: addedText || "",
-        confidence: safe ? 0.9 : 0.5,
-        safeAuto: safe,
-        severity: safe ? "info" : "suggestion",
-        explanation: safe ? `Local model fix: ${reason}` : `Local model suggestion (not auto-applied): ${reason}`,
-        sourceHash,
-      });
-    } else if (part.added) {
-      // Pure insertion with no paired removal (e.g. the model added a missing word).
-      // Insertions are never auto-applied — no "original" span to anchor/verify against.
-      const toTrim = part.value.trim();
-      if (!toTrim) continue;
-      issues.push({
-        id: `local_${randomUUID().slice(0, 8)}`,
-        category: "grammar",
-        rule: "local_model_suggestion",
-        startUtf16: originalOffset,
-        endUtf16: originalOffset,
-        original: "",
-        replacement: part.value,
-        confidence: 0.4,
-        safeAuto: false,
-        severity: "suggestion",
-        explanation: "Local model suggests inserting text here (not auto-applied)",
+        replacement: addedText,
+        confidence: 0.9,
+        safeAuto: true,
+        severity: "info",
+        explanation: `Local model fix: ${reason}`,
         sourceHash,
       });
     }
+    // Pure insertions (no paired removal) are never surfaced at all — same reasoning as
+    // above, and insertions in particular have no "original" span to safety-check against.
   }
 
   return issues;
