@@ -1311,7 +1311,7 @@ if (!window.__prosepilot_bridge_installed) {
     const issuesHtml = issues
       .map(
         (issue) => `
-      <div style="padding:8px;background:#f9fafb;border-radius:6px;margin-bottom:6px;border-left:3px solid ${
+      <div class="prosepilot-list-issue" data-issue-id="${escapeHtml(String(issue.id))}" style="padding:8px;background:#f9fafb;border-radius:6px;margin-bottom:6px;border-left:3px solid ${
         issue.category === "spelling"
           ? "#dc2626"
           : issue.category === "grammar"
@@ -1325,6 +1325,10 @@ if (!window.__prosepilot_bridge_installed) {
           <span style="color:#059669;font-weight:500;">${escapeHtml(issue.replacement)}</span>
         </div>
         <div style="font-size:11px;color:#6b7280;margin-top:4px;">${escapeHtml(issue.explanation)}</div>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <button class="prosepilot-list-accept" data-issue-id="${escapeHtml(String(issue.id))}" style="flex:1;padding:5px 8px;border:none;border-radius:5px;background:#dcfce7;color:#166534;font-size:11px;font-weight:500;cursor:pointer;">Accept</button>
+          <button class="prosepilot-list-skip" data-issue-id="${escapeHtml(String(issue.id))}" style="flex:1;padding:5px 8px;border:none;border-radius:5px;background:#f3f4f6;color:#6b7280;font-size:11px;font-weight:500;cursor:pointer;">Skip</button>
+        </div>
       </div>
     `
       )
@@ -1360,6 +1364,56 @@ if (!window.__prosepilot_bridge_installed) {
     popupInner.style.left = left + "px";
 
     popup.querySelector(".prosepilot-close").addEventListener("click", hidePopup);
+
+    // Accept: this popup only ever appears for textarea/input elements (the contentEditable
+    // path uses showSuggestionPopup's per-underline click instead), so a direct value splice
+    // is safe here — no DOM-node surgery needed like applyAutoCorrectToContentEditable does.
+    popup.querySelectorAll(".prosepilot-list-accept").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const issueId = btn.dataset.issueId;
+        const issue = issues.find((i) => String(i.id) === issueId);
+        if (!issue) return;
+
+        const text = getElementText(el);
+        let idx = -1;
+        if (issue.startUtf16 !== null && issue.startUtf16 !== undefined && text.substring(issue.startUtf16, issue.startUtf16 + issue.original.length) === issue.original) {
+          idx = issue.startUtf16;
+        } else {
+          idx = text.indexOf(issue.original);
+        }
+
+        if (idx === -1) {
+          showToast("Couldn't find that text — it may have already changed.", "error");
+          return;
+        }
+
+        const newText = text.slice(0, idx) + issue.replacement + text.slice(idx + issue.original.length);
+        isAutoCorrecting = true;
+        isRenderingUnderlines = true;
+        setElementText(el, newText);
+        lastCheckedText.set(el, newText);
+        setTimeout(() => { isAutoCorrecting = false; isRenderingUnderlines = false; }, 0);
+
+        hidePopup();
+        showToast("✓ Correction applied");
+        // Re-check rather than try to patch up offsets for any remaining issues in this
+        // list — a fresh check against the corrected text is simpler and always accurate.
+        setTimeout(() => triggerCheck(el), 300);
+      });
+    });
+
+    // Skip: just dismiss that one row locally — no server round-trip needed, this only
+    // affects what's shown in this popup instance.
+    popup.querySelectorAll(".prosepilot-list-skip").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const row = btn.closest(".prosepilot-list-issue");
+        if (row) row.remove();
+        if (popup.querySelectorAll(".prosepilot-list-issue").length === 0) hidePopup();
+      });
+    });
+
     setTimeout(() => {
       document.addEventListener("click", (e) => {
         if (activePopup && !activePopup.contains(e.target)) {
