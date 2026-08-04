@@ -1221,6 +1221,35 @@ if (!window.__prosepilot_bridge_installed) {
 
   // ==================== SUGGESTION POPUPS ====================
 
+  // After a single fix is applied, any OTHER pending issue in the same field that came
+  // after it in the text has shifted character positions. Recomputing that locally lets
+  // the remaining underlines/rows re-render instantly instead of paying for a full API
+  // round-trip (including the DeepSeek call in "review" mode) after every single accept —
+  // that per-accept full re-check was the direct cause of a paragraph with many issues
+  // taking 1-2 minutes to work through. Anything whose range overlaps the edit, or has no
+  // known offset, is dropped rather than guessed at, matching this file's existing rule of
+  // failing gracefully instead of risking a misplaced edit. Dropped issues simply stop
+  // being shown for the rest of this session — they'll resurface on the next real check
+  // if the user keeps editing that spot.
+  function patchIssueOffsets(acceptedIssue, otherIssues) {
+    const accStart = acceptedIssue.startUtf16;
+    const hasAccStart = accStart !== null && accStart !== undefined;
+    const accEnd = hasAccStart ? accStart + acceptedIssue.original.length : null;
+    const delta = acceptedIssue.replacement.length - acceptedIssue.original.length;
+
+    return otherIssues
+      .filter((i) => i.id !== acceptedIssue.id)
+      .map((i) => {
+        if (!hasAccStart || i.startUtf16 === null || i.startUtf16 === undefined) return null;
+        const iStart = i.startUtf16;
+        const iEnd = iStart + i.original.length;
+        if (iEnd <= accStart) return i; // entirely before the edit — unaffected
+        if (iStart >= accEnd) return { ...i, startUtf16: iStart + delta }; // entirely after — shift
+        return null; // overlaps the edit — ambiguous, drop rather than misplace
+      })
+      .filter((i) => i !== null);
+  }
+
   function showSuggestionPopup(target, issue, editableEl) {
     hidePopup();
 
@@ -1291,6 +1320,10 @@ if (!window.__prosepilot_bridge_installed) {
       hidePopup();
     });
     popup.querySelector(".prosepilot-accept").addEventListener("click", async () => {
+      // Suppress the MutationObserver's own re-check for the DOM edit below — we're about
+      // to patch offsets and re-render locally instead of paying for a full re-check.
+      isRenderingUnderlines = true;
+
       // Find the underline span for this issue and replace it directly
       const safeId = CSS.escape(String(issue.id));
       const span = editableEl.querySelector(`.prosepilot-underline[data-issue-id="${safeId}"]`);
@@ -1310,7 +1343,14 @@ if (!window.__prosepilot_bridge_installed) {
       }
       hidePopup();
       showToast("✓ Correction applied");
-      setTimeout(() => triggerCheck(editableEl), 300);
+
+      // Patch the remaining issues' offsets locally and re-render immediately — no full
+      // re-check needed for every single accept.
+      const remaining = issueMap.get(editableEl) || [];
+      const updated = patchIssueOffsets(issue, remaining);
+      issueMap.set(editableEl, updated);
+      lastCheckedText.set(editableEl, getElementText(editableEl));
+      renderUnderlines(editableEl, updated);
     });
 
     setTimeout(() => {
@@ -1318,15 +1358,20 @@ if (!window.__prosepilot_bridge_installed) {
     }, 10);
   }
 
-  function showIssueListPopup(el, issues) {
+  function showIssueListPopup(el, issuesParam) {
     hidePopup();
 
     const popup = document.createElement("div");
     popup.className = "prosepilot-popup";
 
-    const issuesHtml = issues
-      .map(
-        (issue) => `
+    // Mutable working copy. Accept no longer closes this popup or forces a full re-check —
+    // it patches the remaining issues' offsets locally (patchIssueOffsets) and re-renders
+    // just the rows below, which is what makes working through a paragraph with many
+    // issues fast instead of a DeepSeek round-trip after every single click.
+    let issues = issuesParam.slice();
+
+    function issueRowHtml(issue) {
+      return `
       <div class="prosepilot-list-issue" data-issue-id="${escapeHtml(String(issue.id))}" style="padding:8px;background:#f9fafb;border-radius:6px;margin-bottom:6px;border-left:3px solid ${
         issue.category === "spelling"
           ? "#dc2626"
@@ -1346,9 +1391,8 @@ if (!window.__prosepilot_bridge_installed) {
           <button class="prosepilot-list-skip" data-issue-id="${escapeHtml(String(issue.id))}" style="flex:1;padding:5px 8px;border:none;border-radius:5px;background:#f3f4f6;color:#6b7280;font-size:11px;font-weight:500;cursor:pointer;">Skip</button>
         </div>
       </div>
-    `
-      )
-      .join("");
+    `;
+    }
 
     popup.innerHTML = `
       <div style="
@@ -1359,10 +1403,10 @@ if (!window.__prosepilot_bridge_installed) {
         font-size:13px;min-width:300px;max-width:400px;max-height:400px;overflow-y:auto;
       ">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-          <span style="font-weight:600;">ProsePilot — ${issues.length} issue(s)</span>
+          <span class="prosepilot-list-title" style="font-weight:600;">ProsePilot — ${issues.length} issue(s)</span>
           <button class="prosepilot-close" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:18px;padding:0;line-height:1;">&times;</button>
         </div>
-        ${issuesHtml}
+        <div id="prosepilot-list-rows">${issues.map(issueRowHtml).join("")}</div>
       </div>
     `;
 
@@ -1381,53 +1425,72 @@ if (!window.__prosepilot_bridge_installed) {
 
     popup.querySelector(".prosepilot-close").addEventListener("click", hidePopup);
 
-    // Accept: this popup only ever appears for textarea/input elements (the contentEditable
-    // path uses showSuggestionPopup's per-underline click instead), so a direct value splice
-    // is safe here — no DOM-node surgery needed like applyAutoCorrectToContentEditable does.
-    popup.querySelectorAll(".prosepilot-list-accept").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const issueId = btn.dataset.issueId;
-        const issue = issues.find((i) => String(i.id) === issueId);
-        if (!issue) return;
+    const rowsContainer = popup.querySelector("#prosepilot-list-rows");
+    const titleEl = popup.querySelector(".prosepilot-list-title");
 
-        const text = getElementText(el);
-        let idx = -1;
-        if (issue.startUtf16 !== null && issue.startUtf16 !== undefined && text.substring(issue.startUtf16, issue.startUtf16 + issue.original.length) === issue.original) {
-          idx = issue.startUtf16;
-        } else {
-          idx = text.indexOf(issue.original);
-        }
+    function syncBadgeAndMap() {
+      if (titleEl) titleEl.textContent = `ProsePilot — ${issues.length} issue(s)`;
+      const badge = el.parentNode?.querySelector(".prosepilot-indicator div");
+      if (badge) badge.textContent = String(issues.length);
+      issueMap.set(el, issues);
+    }
 
-        if (idx === -1) {
-          showToast("Couldn't find that text — it may have already changed.", "error");
-          return;
-        }
+    // Event delegation for accept/skip — rows get replaced wholesale after each action, so
+    // one delegated listener (bound once, here) avoids re-binding after every render.
+    rowsContainer.addEventListener("click", (e) => {
+      const acceptBtn = e.target.closest(".prosepilot-list-accept");
+      const skipBtn = e.target.closest(".prosepilot-list-skip");
+      if (!acceptBtn && !skipBtn) return;
+      e.stopPropagation();
 
-        const newText = text.slice(0, idx) + issue.replacement + text.slice(idx + issue.original.length);
-        isAutoCorrecting = true;
-        isRenderingUnderlines = true;
-        setElementText(el, newText);
-        lastCheckedText.set(el, newText);
-        setTimeout(() => { isAutoCorrecting = false; isRenderingUnderlines = false; }, 0);
+      const issueId = (acceptBtn || skipBtn).dataset.issueId;
+      const issue = issues.find((i) => String(i.id) === issueId);
+      if (!issue) return;
 
+      if (skipBtn) {
+        // Skip: just dismiss that one row locally — no server round-trip needed.
+        issues = issues.filter((i) => i.id !== issue.id);
+        syncBadgeAndMap();
+        if (issues.length === 0) { hidePopup(); return; }
+        rowsContainer.innerHTML = issues.map(issueRowHtml).join("");
+        return;
+      }
+
+      // Accept: this popup only ever appears for textarea/input elements (the contentEditable
+      // path uses showSuggestionPopup's per-underline click instead), so a direct value splice
+      // is safe here — no DOM-node surgery needed like applyAutoCorrectToContentEditable does.
+      const text = getElementText(el);
+      let idx = -1;
+      if (issue.startUtf16 !== null && issue.startUtf16 !== undefined && text.substring(issue.startUtf16, issue.startUtf16 + issue.original.length) === issue.original) {
+        idx = issue.startUtf16;
+      } else {
+        idx = text.indexOf(issue.original);
+      }
+
+      if (idx === -1) {
+        showToast("Couldn't find that text — it may have already changed.", "error");
+        return;
+      }
+
+      const newText = text.slice(0, idx) + issue.replacement + text.slice(idx + issue.original.length);
+      isAutoCorrecting = true;
+      isRenderingUnderlines = true;
+      setElementText(el, newText);
+      lastCheckedText.set(el, newText);
+      setTimeout(() => { isAutoCorrecting = false; isRenderingUnderlines = false; }, 0);
+
+      showToast("✓ Correction applied");
+
+      // Patch the remaining issues' offsets locally instead of a full re-check — this is
+      // what keeps working through a long list fast.
+      issues = patchIssueOffsets(issue, issues);
+      syncBadgeAndMap();
+
+      if (issues.length === 0) {
         hidePopup();
-        showToast("✓ Correction applied");
-        // Re-check rather than try to patch up offsets for any remaining issues in this
-        // list — a fresh check against the corrected text is simpler and always accurate.
-        setTimeout(() => triggerCheck(el), 300);
-      });
-    });
-
-    // Skip: just dismiss that one row locally — no server round-trip needed, this only
-    // affects what's shown in this popup instance.
-    popup.querySelectorAll(".prosepilot-list-skip").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const row = btn.closest(".prosepilot-list-issue");
-        if (row) row.remove();
-        if (popup.querySelectorAll(".prosepilot-list-issue").length === 0) hidePopup();
-      });
+      } else {
+        rowsContainer.innerHTML = issues.map(issueRowHtml).join("");
+      }
     });
 
     setTimeout(() => {

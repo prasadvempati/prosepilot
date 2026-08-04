@@ -35,6 +35,19 @@ export function Header() {
 
           {/* Auth */}
           <div className="flex items-center gap-3">
+            {/* Always visible regardless of sign-in state — the Chrome/Edge install buttons
+                only exist in the signed-out marketing section below, so a signed-in user
+                previously had no way to reach the extension download at all. */}
+            <a
+              href="/prosepilot-extension.zip"
+              download
+              className="btn-ghost text-sm hidden sm:flex items-center gap-1.5"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Get the extension
+            </a>
             {!isSignedIn && (
               <>
                 <SignInButton mode="modal">

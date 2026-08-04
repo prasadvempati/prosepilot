@@ -164,6 +164,18 @@ async function handleApplyFix(original, replacement, sendResponse) {
         // Delete only the original text
         fixRange.deleteContents();
 
+        // CRITICAL: execCommand always inserts at the page's *current active selection*,
+        // not at the Range object we just built. fixRange.deleteContents() only mutated
+        // the DOM — it never touched window.getSelection(), which is still the user's
+        // original (much larger) highlighted selection from before "Check Selection" was
+        // clicked. Without repointing the active selection at fixRange (now collapsed to
+        // exactly where the deletion happened), execCommand below would replace the user's
+        // ENTIRE original selection with just this one short replacement — wiping out the
+        // rest of their selected paragraph. This was silently destroying user text on
+        // every "Accept"/"Accept All Fixes" click.
+        sel.removeAllRanges();
+        sel.addRange(fixRange);
+
         // Insert replacement — preserve line breaks as <br>
         if (repl.includes("\n")) {
           const html = repl.replace(/\n/g, "<br>");
