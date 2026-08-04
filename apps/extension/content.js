@@ -34,6 +34,7 @@ if (!window.__prosepilot_bridge_installed) {
   const MIN_TEXT_LENGTH = 10;
   const STORAGE_KEY = "prosepilot_grammar_mode";
   const DISABLED_KEY = "prosepilot_disabled";
+  const IGNORED_WORDS_KEY = "prosepilot_ignored_words";
   const MAX_CHECK_LENGTH = 100000; // 100K chars max per grammar check
 
   // Kill switch: Rewrite is currently timing out in production (server-side, not yet root
@@ -76,6 +77,10 @@ if (!window.__prosepilot_bridge_installed) {
   // live-editing text without an explicit user action — caret jumps, offset drift, duplicate
   // overlapping edits). Only "suggest" (highlight + click to accept) and "none" exist now.
   let currentMode = "suggest";
+  // Words/phrases the user has told us to stop flagging (e.g. a proper noun like "Elijio"
+  // that isn't actually a spelling mistake). Persisted across sessions and pages — once
+  // ignored, never flagged again anywhere, not just the field it was ignored in.
+  let ignoredWords = new Set();
   // Track focused element
   let focusedElement = null;
   // Flag to prevent feedback loop from MutationObserver during underline rendering
@@ -119,6 +124,38 @@ if (!window.__prosepilot_bridge_installed) {
       await chrome.storage.local.set({ [STORAGE_KEY]: mode });
     } catch {
       // Storage unavailable
+    }
+  }
+
+  // ==================== IGNORED WORDS ====================
+
+  function normalizeWord(text) {
+    return (text || "").trim().toLowerCase();
+  }
+
+  function isIgnored(text) {
+    return ignoredWords.has(normalizeWord(text));
+  }
+
+  async function loadIgnoredWords() {
+    try {
+      const result = await chrome.storage.local.get(IGNORED_WORDS_KEY);
+      const arr = Array.isArray(result[IGNORED_WORDS_KEY]) ? result[IGNORED_WORDS_KEY] : [];
+      ignoredWords = new Set(arr);
+    } catch {
+      ignoredWords = new Set();
+    }
+  }
+
+  async function addIgnoredWord(text) {
+    const normalized = normalizeWord(text);
+    if (!normalized) return;
+    ignoredWords.add(normalized);
+    try {
+      await chrome.storage.local.set({ [IGNORED_WORDS_KEY]: Array.from(ignoredWords) });
+    } catch {
+      // Storage write failed — the word still stays ignored for the rest of this page's
+      // session via the in-memory Set, it just won't persist across a reload.
     }
   }
 
@@ -1273,7 +1310,7 @@ if (!window.__prosepilot_bridge_installed) {
           <span style="color:#059669;font-weight:500;">${escapeHtml(issue.replacement)}</span>
         </div>
         <div style="color:#6b7280;font-size:11px;margin-bottom:10px;line-height:1.4;">${escapeHtml(issue.explanation)}</div>
-        <div style="display:flex;gap:6px;">
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
           <button class="prosepilot-accept" style="
             flex:1;padding:7px 12px;border:none;border-radius:6px;
             background:#059669;color:white;font-size:12px;font-weight:500;cursor:pointer;
@@ -1283,6 +1320,10 @@ if (!window.__prosepilot_bridge_installed) {
             background:#f3f4f6;color:#374151;font-size:12px;font-weight:500;cursor:pointer;
           ">Skip</button>
         </div>
+        <button class="prosepilot-ignore" style="
+          width:100%;padding:5px 8px;border:none;background:none;
+          color:#9ca3af;font-size:11px;cursor:pointer;text-decoration:underline;
+        ">Ignore "${escapeHtml(issue.original)}" everywhere</button>
       </div>
     `;
 
@@ -1353,6 +1394,18 @@ if (!window.__prosepilot_bridge_installed) {
       renderUnderlines(editableEl, updated);
     });
 
+    popup.querySelector(".prosepilot-ignore").addEventListener("click", async () => {
+      await addIgnoredWord(issue.original);
+      isRenderingUnderlines = true;
+      // Drop every OTHER occurrence of this same word from the current issue list too —
+      // not just the one the user clicked on.
+      const remaining = (issueMap.get(editableEl) || []).filter((i) => normalizeWord(i.original) !== normalizeWord(issue.original));
+      issueMap.set(editableEl, remaining);
+      renderUnderlines(editableEl, remaining);
+      hidePopup();
+      showToast(`Won't flag "${issue.original}" again`);
+    });
+
     setTimeout(() => {
       document.addEventListener("click", hidePopup, { once: true });
     }, 10);
@@ -1390,6 +1443,7 @@ if (!window.__prosepilot_bridge_installed) {
           <button class="prosepilot-list-accept" data-issue-id="${escapeHtml(String(issue.id))}" style="flex:1;padding:5px 8px;border:none;border-radius:5px;background:#dcfce7;color:#166534;font-size:11px;font-weight:500;cursor:pointer;">Accept</button>
           <button class="prosepilot-list-skip" data-issue-id="${escapeHtml(String(issue.id))}" style="flex:1;padding:5px 8px;border:none;border-radius:5px;background:#f3f4f6;color:#6b7280;font-size:11px;font-weight:500;cursor:pointer;">Skip</button>
         </div>
+        <button class="prosepilot-list-ignore" data-issue-id="${escapeHtml(String(issue.id))}" style="width:100%;margin-top:4px;padding:3px 8px;border:none;background:none;color:#9ca3af;font-size:10px;cursor:pointer;text-decoration:underline;">Ignore "${escapeHtml(issue.original)}" everywhere</button>
       </div>
     `;
     }
@@ -1437,13 +1491,14 @@ if (!window.__prosepilot_bridge_installed) {
 
     // Event delegation for accept/skip — rows get replaced wholesale after each action, so
     // one delegated listener (bound once, here) avoids re-binding after every render.
-    rowsContainer.addEventListener("click", (e) => {
+    rowsContainer.addEventListener("click", async (e) => {
       const acceptBtn = e.target.closest(".prosepilot-list-accept");
       const skipBtn = e.target.closest(".prosepilot-list-skip");
-      if (!acceptBtn && !skipBtn) return;
+      const ignoreBtn = e.target.closest(".prosepilot-list-ignore");
+      if (!acceptBtn && !skipBtn && !ignoreBtn) return;
       e.stopPropagation();
 
-      const issueId = (acceptBtn || skipBtn).dataset.issueId;
+      const issueId = (acceptBtn || skipBtn || ignoreBtn).dataset.issueId;
       const issue = issues.find((i) => String(i.id) === issueId);
       if (!issue) return;
 
@@ -1451,6 +1506,18 @@ if (!window.__prosepilot_bridge_installed) {
         // Skip: just dismiss that one row locally — no server round-trip needed.
         issues = issues.filter((i) => i.id !== issue.id);
         syncBadgeAndMap();
+        if (issues.length === 0) { hidePopup(); return; }
+        rowsContainer.innerHTML = issues.map(issueRowHtml).join("");
+        return;
+      }
+
+      if (ignoreBtn) {
+        // Ignore: persist so this word never gets flagged again anywhere, and drop every
+        // OTHER occurrence of it from this list right now too.
+        await addIgnoredWord(issue.original);
+        issues = issues.filter((i) => normalizeWord(i.original) !== normalizeWord(issue.original));
+        syncBadgeAndMap();
+        showToast(`Won't flag "${issue.original}" again`);
         if (issues.length === 0) { hidePopup(); return; }
         rowsContainer.innerHTML = issues.map(issueRowHtml).join("");
         return;
@@ -1542,7 +1609,10 @@ if (!window.__prosepilot_bridge_installed) {
     if (lastCheckedText.get(el) === text) return;
 
     console.log(`[ProsePilot] Checking text (${text.length} chars): "${text.substring(0, 80)}..."`);
-    const issues = await checkText(text);
+    const rawIssues = await checkText(text);
+    // Drop anything the user has told us to stop flagging (e.g. a proper noun that isn't
+    // actually a spelling mistake) — applies to every future check, not just this element.
+    const issues = rawIssues.filter((i) => !isIgnored(i.original));
     issueMap.set(el, issues);
     lastCheckedText.set(el, text);
 
@@ -1642,6 +1712,7 @@ if (!window.__prosepilot_bridge_installed) {
   async function init() {
     injectStyles();
     await loadMode();
+    await loadIgnoredWords();
 
     // Load cached Clerk token from storage
     try {
