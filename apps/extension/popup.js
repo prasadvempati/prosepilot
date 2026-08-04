@@ -111,7 +111,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Load current mode and set radio
   const { prosepilot_grammar_mode } = await chrome.storage.local.get("prosepilot_grammar_mode");
-  const currentModeVal = prosepilot_grammar_mode || "auto";
+  // Auto-correct mode was removed — migrate anyone with the old "auto" preference already
+  // saved to "suggest" rather than leaving it as a dead, unhandled value.
+  let currentModeVal = prosepilot_grammar_mode || "suggest";
+  if (currentModeVal === "auto") {
+    currentModeVal = "suggest";
+    chrome.storage.local.set({ prosepilot_grammar_mode: "suggest" });
+  }
   console.log("[ProsePilot Popup] Current mode:", currentModeVal, "stored:", prosepilot_grammar_mode);
 
   // Set all radios unchecked first, then check the current one
@@ -126,7 +132,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     modeRadio.checked = true;
     const label = modeRadio.closest("label");
     if (label) {
-      label.style.background = currentModeVal === "auto" ? "#d1fae5" : currentModeVal === "suggest" ? "#fef3c7" : "#fee2e2";
+      label.style.background = currentModeVal === "suggest" ? "#fef3c7" : "#fee2e2";
     }
     console.log("[ProsePilot Popup] Set radio:", currentModeVal, "checked:", modeRadio.checked);
   } else {
@@ -143,7 +149,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const lbl = r.closest("label");
         if (lbl) {
           if (r.checked) {
-            lbl.style.background = mode === "auto" ? "#d1fae5" : mode === "suggest" ? "#fef3c7" : "#fee2e2";
+            lbl.style.background = mode === "suggest" ? "#fef3c7" : "#fee2e2";
           } else {
             lbl.style.background = "#f3f4f6";
           }

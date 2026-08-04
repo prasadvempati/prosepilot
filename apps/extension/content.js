@@ -72,8 +72,10 @@ if (!window.__prosepilot_bridge_installed) {
   const issueMap = new WeakMap();
   // Track active popup
   let activePopup = null;
-  // Track current mode
-  let currentMode = "auto";
+  // Track current mode. Auto-correct mode was removed (too many bug classes came from
+  // live-editing text without an explicit user action — caret jumps, offset drift, duplicate
+  // overlapping edits). Only "suggest" (highlight + click to accept) and "none" exist now.
+  let currentMode = "suggest";
   // Track focused element
   let focusedElement = null;
   // Flag to prevent feedback loop from MutationObserver during underline rendering
@@ -96,7 +98,14 @@ if (!window.__prosepilot_bridge_installed) {
   async function loadMode() {
     try {
       const result = await chrome.storage.local.get([STORAGE_KEY, DISABLED_KEY]);
-      currentMode = result[STORAGE_KEY] || "auto";
+      // Migrate anyone with the old "auto" preference already saved (from before Auto-correct
+      // was removed) to "suggest" rather than leaving it as a dead, unhandled value.
+      if (result[STORAGE_KEY] === "auto") {
+        currentMode = "suggest";
+        chrome.storage.local.set({ [STORAGE_KEY]: "suggest" }).catch(() => {});
+      } else {
+        currentMode = result[STORAGE_KEY] || "suggest";
+      }
       isDisabled = !!result[DISABLED_KEY];
     } catch {
       currentMode = "suggest";
@@ -212,7 +221,6 @@ if (!window.__prosepilot_bridge_installed) {
     popover.id = "prosepilot-popover";
 
     const modes = [
-      { id: "auto", label: "Auto-correct", color: "#10b981", dot: "#10b981", desc: "Fix grammar as you type" },
       { id: "suggest", label: "Suggest corrections", color: "#f59e0b", dot: "#f59e0b", desc: "Highlight errors, click to fix" },
       { id: "none", label: "No correction", color: "#ef4444", dot: "#ef4444", desc: "Grammar checking off" },
     ];
@@ -1470,119 +1478,22 @@ if (!window.__prosepilot_bridge_installed) {
     // Skip if text hasn't changed since last check
     if (lastCheckedText.get(el) === text) return;
 
-    // Tier-0 fast pass: Auto mode + contentEditable only. Fires a lightweight check (rule
-    // engine + LanguageTool, skips the slower DeepSeek call) so obvious, high-confidence
-    // typos/grammar fixes land in a few hundred ms instead of waiting on the full
-    // multi-second round-trip below. Scoped narrowly on purpose — Suggest mode and
-    // textarea/input elements are untouched, and the full check immediately after this
-    // block runs exactly as it did before, unchanged, picking up anything DeepSeek finds.
-    let text2 = text;
-    if (currentMode === "auto" && el.tagName !== "TEXTAREA" && el.tagName !== "INPUT") {
-      const fastIssues = await checkText(text, true);
-      // Staleness guard: only apply if the live text still matches what we checked.
-      if (fastIssues.length > 0 && getElementText(el) === text2) {
-        isAutoCorrecting = true;
-        isRenderingUnderlines = true;
-        const fixedFast = applyAutoCorrectToContentEditable(el, fastIssues);
-        if (fixedFast) {
-          showToast("✓ Correction applied");
-        }
-        setTimeout(() => { isAutoCorrecting = false; isRenderingUnderlines = false; }, 0);
-        // Re-snapshot so the full check below runs against current (possibly fast-pass
-        // corrected) text rather than the now-stale pre-fix snapshot.
-        text2 = getElementText(el);
-      }
-    }
-
-    console.log(`[ProsePilot] Checking text (${text2.length} chars): "${text2.substring(0, 80)}..."`);
-    const issues = await checkText(text2);
+    console.log(`[ProsePilot] Checking text (${text.length} chars): "${text.substring(0, 80)}..."`);
+    const issues = await checkText(text);
     issueMap.set(el, issues);
-    lastCheckedText.set(el, text2);
+    lastCheckedText.set(el, text);
 
     console.log(`[ProsePilot] Mode: ${currentMode}, Issues found: ${issues.length}`, issues);
 
-    // Staleness guard: `text2` above was snapshotted BEFORE the await checkText() network
-    // round-trip (post fast-pass, for contentEditable in auto mode; otherwise identical to
-    // the original `text`). If the user kept typing while that request was in flight, every
-    // offset in `issues` describes positions in text that no longer exists — applying them
-    // can land mid-word (e.g. splitting "table" into "ta.ble") even though the substring
-    // check inside the apply functions happens to pass on short/common fragments. If the
-    // live text has moved on, drop this round's corrections; the next debounced check
-    // (which will fire once typing settles) will re-check the current text correctly.
-    if (currentMode === "auto" && getElementText(el) !== text2) {
-      return;
-    }
-
-    if (currentMode === "auto") {
-      // Auto-correct: textarea/input use full replacement, contentEditable uses surgical replacement
-      if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
-        const autoIssues = issues.filter(
-          (i) => i.safeAuto === true && i.confidence >= 0.85 && i.category !== "style" && i.category !== "tone" && i.rule !== "missing_period" && i.replacement && i.original !== i.replacement
-        );
-        if (autoIssues.length > 0) {
-          let newText = text2;
-          const sorted = [...autoIssues].sort((a, b) => b.startUtf16 - a.startUtf16);
-          for (const issue of sorted) {
-            if (issue.startUtf16 !== null && issue.startUtf16 !== undefined) {
-              const idx = issue.startUtf16;
-              if (idx >= 0 && idx + issue.original.length <= newText.length && newText.substring(idx, idx + issue.original.length) === issue.original) {
-                newText = newText.slice(0, idx) + issue.replacement + newText.slice(idx + issue.original.length);
-              }
-            } else {
-              const idx = newText.indexOf(issue.original);
-              if (idx !== -1) {
-                newText = newText.slice(0, idx) + issue.replacement + newText.slice(idx + issue.original.length);
-              }
-            }
-          }
-          if (newText !== text2) {
-            isAutoCorrecting = true;
-            isRenderingUnderlines = true;
-            setElementText(el, newText);
-            lastCheckedText.set(el, newText);
-            showToast(`✓ ${autoIssues.length} correction${autoIssues.length > 1 ? "s" : ""} applied`);
-            setTimeout(() => { isAutoCorrecting = false; isRenderingUnderlines = false; }, 0);
-            return;
-          }
-        }
-      } else {
-        // contentEditable: surgical replacement (preserves formatting)
-        isAutoCorrecting = true;
-        isRenderingUnderlines = true;
-        const fixed = applyAutoCorrectToContentEditable(el, issues);
-        if (fixed) {
-          lastCheckedText.set(el, getElementText(el));
-          showToast("✓ Corrections applied");
-        }
-        // Show underlines for issues that couldn't be auto-fixed
-        const remaining = issues.filter((i) => i.safeAuto !== true || i.confidence < 0.85 || i.category === "style" || i.category === "tone" || i.rule === "missing_period" || !i.replacement || i.original === i.replacement);
-        if (remaining.length > 0) {
-          setTimeout(() => {
-            isAutoCorrecting = false;
-            isRenderingUnderlines = false;
-            renderUnderlines(el, remaining);
-            // Catch-up: the mutation observer ignores DOM changes while the flags above
-            // are true (so it doesn't react to our own underline-drawing edits) — but that
-            // means real keystrokes typed during this window were silently dropped and
-            // never re-checked, leaving stale underlines on text that's since changed.
-            // If the live text has moved on from what we just rendered against, re-check now.
-            if (getElementText(el) !== lastCheckedText.get(el)) triggerCheck(el);
-          }, 100);
-          return;
-        }
-        setTimeout(() => {
-          isAutoCorrecting = false;
-          isRenderingUnderlines = false;
-          if (getElementText(el) !== lastCheckedText.get(el)) triggerCheck(el);
-        }, 0);
-        return;
-      }
-      // Fallback: show underlines for issues that couldn't be auto-applied
-      renderUnderlines(el, issues);
-    } else if (currentMode === "suggest") {
-      // Suggest: show underlines
-      renderUnderlines(el, issues);
-    }
+    // Auto-correct mode was removed entirely (see REMOVE_AUTO_MODE note near currentMode's
+    // declaration) — every issue is now shown as a clickable underline/badge and the user
+    // explicitly accepts or skips each one via showSuggestionPopup / showIssueListPopup.
+    // Nothing ever edits the live text without that explicit click, which eliminates the
+    // whole class of bugs the old auto-apply path kept hitting: caret jumping mid-type,
+    // offset drift from stale snapshots, and duplicate overlapping edits from two tiers
+    // flagging the same fix. wrapIssuesInSpans/renderUnderlines already fail gracefully
+    // (skip, don't corrupt) if the live text has moved on since this check started.
+    renderUnderlines(el, issues);
   }, DEBOUNCE_MS);
 
   // ==================== ELEMENT OBSERVER ====================
