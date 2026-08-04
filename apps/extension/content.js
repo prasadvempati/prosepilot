@@ -36,6 +36,12 @@ if (!window.__prosepilot_bridge_installed) {
   const DISABLED_KEY = "prosepilot_disabled";
   const MAX_CHECK_LENGTH = 100000; // 100K chars max per grammar check
 
+  // Kill switch: Rewrite is currently timing out in production (server-side, not yet root
+  // caused) and the user asked to hide it from view until it's actually fixed and verified,
+  // rather than leaving a visibly-broken feature live on a commercial product. Flip back to
+  // true once the timeout issue is resolved and tested — no other code needs to change.
+  const REWRITE_FEATURE_ENABLED = false;
+
   // Tones the /v1/rewrite backend accepts (mirrors RewriteTone in packages/writing-core/src/types.ts,
   // minus "custom" — custom instructions need a text input, left for a later iteration).
   const REWRITE_TONES = [
@@ -246,6 +252,7 @@ if (!window.__prosepilot_bridge_installed) {
           Grammar Mode
         </div>
         ${modesHtml}
+        ${REWRITE_FEATURE_ENABLED ? `
         <div style="border-top:1px solid #e5e7eb;margin:4px 0;"></div>
         <div class="prosepilot-mode-option" id="prosepilot-rewrite-open" style="
           display:flex;align-items:center;gap:10px;padding:10px 12px;
@@ -261,6 +268,7 @@ if (!window.__prosepilot_bridge_installed) {
             <div style="font-size:11px;color:#6b7280;">Change tone: professional, concise, diplomatic...</div>
           </div>
         </div>
+        ` : ""}
         <div style="border-top:1px solid #e5e7eb;margin:4px 0;"></div>
         <div class="prosepilot-mode-option" id="prosepilot-turnoff" style="
           display:flex;align-items:center;gap:10px;padding:10px 12px;

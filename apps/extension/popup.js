@@ -1,5 +1,10 @@
 const API_BASE = "https://prosepilot.io";
 
+// Kill switch: Rewrite is currently timing out in production (server-side, not yet root
+// caused) — hidden from view until it's actually fixed and verified. Flip back to true
+// once resolved; no other code needs to change.
+const REWRITE_FEATURE_ENABLED = false;
+
 let currentIssues = [];
 let selectedText = "";
 
@@ -67,6 +72,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const rewriteTone = document.getElementById("rewriteTone");
   const rewritePreview = document.getElementById("rewritePreview");
 
+  if (!REWRITE_FEATURE_ENABLED && rewriteSection) {
+    rewriteSection.style.display = "none";
+  }
+
   if (prosepilot_disabled) {
     disabledBanner.style.display = "block";
     checkBtn.style.display = "none";
@@ -94,7 +103,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       signInBtn.style.display = "";
       settingsBtn.style.display = "";
       status.style.display = "";
-      if (rewriteSection) rewriteSection.style.display = "";
+      if (rewriteSection && REWRITE_FEATURE_ENABLED) rewriteSection.style.display = "";
       status.textContent = "ProsePilot re-enabled!";
       status.className = "status ready";
     });
