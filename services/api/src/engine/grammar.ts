@@ -393,7 +393,27 @@ Return ONLY the JSON array, no other text.`;
     ]);
 
     const sourceHash = await computeHash(text);
-    const parsed = JSON.parse(response);
+
+    // DeepSeek is told "Return ONLY the JSON array, no other text" but LLMs are unreliable
+    // about following that literally — it can wrap the array in a ```json ... ``` markdown
+    // fence, or add a stray sentence before/after it. A bare JSON.parse(response) throws on
+    // any of that, which the catch below then silently turns into "found 0 issues" — visually
+    // identical to DeepSeek genuinely finding nothing, even when it correctly identified real
+    // errors. Pull out the first [...] array substring instead of trusting the response is
+    // already clean JSON.
+    const arrayMatch = response.match(/\[[\s\S]*\]/);
+    const jsonCandidate = arrayMatch ? arrayMatch[0] : response;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonCandidate);
+    } catch (parseError) {
+      // Don't log the response itself — DeepSeek's output can echo back user text. Length
+      // alone is enough to confirm in Railway logs that this path is firing instead of
+      // silently guessing why a check found 0 AI issues.
+      console.warn(`[grammar] DeepSeek response failed JSON.parse (response length: ${response.length})`);
+      return [];
+    }
 
     if (!Array.isArray(parsed)) return [];
 

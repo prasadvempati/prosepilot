@@ -21,8 +21,12 @@ export function Header() {
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-1">
-            <a href="#features" className="btn-ghost text-sm">Features</a>
-            <a href="#pricing" className="btn-ghost text-sm">Pricing</a>
+            {/* Absolute path + hash, not a bare "#features" — this header also renders on the
+                signed-in app/tool page, which has no #features or #pricing section in its DOM,
+                so a bare hash link silently does nothing there. "/#features" always navigates
+                to the homepage first, where the section actually exists to scroll to. */}
+            <a href="/#features" className="btn-ghost text-sm">Features</a>
+            <a href="/#pricing" className="btn-ghost text-sm">Pricing</a>
           </nav>
 
           {/* Auth */}
@@ -67,8 +71,8 @@ export function Header() {
         {mobileMenuOpen && (
           <div className="md:hidden py-4 border-t border-surface-200/50 animate-slide-up">
             <div className="flex flex-col gap-2">
-              <a href="#features" className="btn-ghost text-sm justify-start" onClick={() => setMobileMenuOpen(false)}>Features</a>
-              <a href="#pricing" className="btn-ghost text-sm justify-start" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
+              <a href="/#features" className="btn-ghost text-sm justify-start" onClick={() => setMobileMenuOpen(false)}>Features</a>
+              <a href="/#pricing" className="btn-ghost text-sm justify-start" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
               {!isSignedIn && (
                 <SignInButton mode="modal">
                   <button className="btn-ghost text-sm justify-start" onClick={() => setMobileMenuOpen(false)}>Sign in</button>
