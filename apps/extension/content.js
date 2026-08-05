@@ -1210,7 +1210,17 @@ if (!window.__prosepilot_bridge_installed) {
       if (node === targetNode) return offset + targetOffset;
       offset += node.textContent.length;
     }
-    return 0;
+    // targetNode wasn't one of the text nodes we walked — the caret is anchored to an
+    // element boundary instead (e.g. an empty paragraph at the start of a fresh line, or a
+    // text node that just got detached by clearUnderlines()/wrapIssuesInSpans() unwrapping
+    // a span mid-typing — both routine in Outlook's compose box). Returning 0 here used to
+    // be indistinguishable from "the caret is genuinely at the very start of the field," and
+    // every caller treated any number as trustworthy — so a caret that was actually
+    // mid-sentence got forcibly snapped back to position 0 on the next underline re-render,
+    // scrambling whatever the user typed next. null tells callers "couldn't determine" so
+    // they skip the forced restore and leave the browser's own selection alone instead of
+    // guessing wrong.
+    return null;
   }
 
   function findNodeAtOffset(root, targetOffset) {
