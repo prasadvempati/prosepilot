@@ -3,6 +3,35 @@ import type { GrammarIssue, RewriteResult } from "@prosepilot/writing-core";
 
 const API_BASE = "";
 
+// Words/phrases the user has told us to stop flagging (e.g. a proper noun like "Elijio"
+// that isn't actually a spelling mistake). Persisted in localStorage — the web equivalent
+// of the extension's chrome.storage.local — so once ignored, a word never gets flagged
+// again on this browser, not just for the current check.
+const IGNORED_WORDS_KEY = "prosepilot_ignored_words";
+
+function normalizeWord(text: string): string {
+  return (text || "").trim().toLowerCase();
+}
+
+function loadIgnoredWords(): Set<string> {
+  try {
+    const raw = localStorage.getItem(IGNORED_WORDS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveIgnoredWords(words: Set<string>) {
+  try {
+    localStorage.setItem(IGNORED_WORDS_KEY, JSON.stringify(Array.from(words)));
+  } catch {
+    // Storage unavailable (private browsing quota, etc.) — the word stays ignored for
+    // this session via in-memory state, it just won't persist across a reload.
+  }
+}
+
 let tokenGetter: (() => Promise<string | null>) | null = null;
 
 export function setTokenGetter(getter: () => Promise<string | null>) {
@@ -43,6 +72,11 @@ interface GrammarStore {
   applyAll: () => void;
   undo: () => void;
   history: string[];
+
+  // Ignore — like dismiss, but permanent (persisted) and applies to every occurrence of
+  // the word, not just the one clicked.
+  ignoredWords: Set<string>;
+  ignoreIssue: (issueId: string) => void;
 }
 
 /**
@@ -97,8 +131,10 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
 
   history: [],
 
+  ignoredWords: loadIgnoredWords(),
+
   checkGrammar: async () => {
-    const { text, voiceProfileId } = get();
+    const { text, voiceProfileId, ignoredWords } = get();
     if (!text.trim()) return;
 
     set({ isChecking: true, issues: [], checkError: null, hasChecked: false });
@@ -117,7 +153,12 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
       }
 
       const data = await response.json();
-      set({ issues: data.issues || [], isChecking: false, hasChecked: true, checkError: null });
+      // Drop anything the user has told us to stop flagging (e.g. a proper noun that
+      // isn't actually a spelling mistake) — applies to every future check.
+      const filtered = (data.issues || []).filter(
+        (i: GrammarIssue) => !ignoredWords.has(normalizeWord(i.original))
+      );
+      set({ issues: filtered, isChecking: false, hasChecked: true, checkError: null });
     } catch (error: any) {
       set({
         isChecking: false,
@@ -175,6 +216,23 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
     set((state) => ({
       issues: state.issues.filter((i) => i.id !== issueId),
     }));
+  },
+
+  ignoreIssue: (issueId) => {
+    const { issues, ignoredWords } = get();
+    const issue = issues.find((i) => i.id === issueId);
+    if (!issue) return;
+
+    const normalized = normalizeWord(issue.original);
+    const updatedIgnored = new Set(ignoredWords);
+    updatedIgnored.add(normalized);
+    saveIgnoredWords(updatedIgnored);
+
+    // Drop every OTHER occurrence of this same word from the current results too, not
+    // just the one the user clicked.
+    const remainingIssues = issues.filter((i) => normalizeWord(i.original) !== normalized);
+
+    set({ issues: remainingIssues, ignoredWords: updatedIgnored });
   },
 
   applyAll: () => {

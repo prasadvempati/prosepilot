@@ -40,7 +40,7 @@ const CATEGORY_BORDERS: Record<string, string> = {
 };
 
 export function SuggestionPanel({ issues, originalText, isChecking, hasChecked, error }: SuggestionPanelProps) {
-  const { applyIssue, dismissIssue, applyAll, undo, history, voiceProfileId } = useGrammarStore();
+  const { applyIssue, dismissIssue, ignoreIssue, applyAll, undo, history, voiceProfileId } = useGrammarStore();
 
   if (isChecking) {
     return (
@@ -233,6 +233,15 @@ export function SuggestionPanel({ issues, originalText, isChecking, hasChecked, 
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => ignoreIssue(issue.id)}
+                    className="p-2 rounded-lg hover:bg-surface-100 text-ink-400 transition-colors"
+                    title={`Ignore "${issue.original}" everywhere — won't be flagged again`}
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21m-6.121-9.121L21 3" />
                     </svg>
                   </button>
                 </div>
