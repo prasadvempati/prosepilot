@@ -1079,11 +1079,24 @@ if (!window.__prosepilot_bridge_installed) {
 
   function clearUnderlines(el) {
     if (!el) return;
+
+    // If the caret is currently live inside one of these spans (the user is actively
+    // editing a word we already flagged), don't touch that specific span. Unwrapping it
+    // means removing the exact DOM node the browser's selection is anchored to — the
+    // mechanical root cause of every caret-jump bug found in this file so far, no matter
+    // how carefully the offset math afterward tries to restore position. Leaving that one
+    // span alone for this render pass costs nothing: it'll be re-evaluated (and re-cleared
+    // if actually fixed or gone) on the next check once the caret has moved elsewhere.
+    const hadFocus = document.activeElement === el || el.contains(document.activeElement);
+    const sel = hadFocus ? window.getSelection() : null;
+    const activeRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+
     // Unwrap all underline and stale spans, restoring plain text nodes
     // Crosses shadow DOM boundaries for Outlook compatibility
     const clearInRoot = (root) => {
       const spans = root.querySelectorAll(".prosepilot-underline, .prosepilot-stale");
       spans.forEach((span) => {
+        if (activeRange && span.contains(activeRange.startContainer)) return;
         const parent = span.parentNode;
         if (!parent) return;
         const textNode = document.createTextNode(span.textContent);
@@ -1141,11 +1154,21 @@ if (!window.__prosepilot_bridge_installed) {
     const textNodes = collectTextNodes(el);
     console.log("[ProsePilot] wrapIssuesInSpans:", textNodes.length, "text nodes,", sorted.length, "issues");
 
+    // If the caret is live inside a text node, never split/replace THAT specific node —
+    // same principle as clearUnderlines above. Splitting the node the browser's selection
+    // is anchored to is what actually causes the cursor to jump; no amount of offset-based
+    // restoration afterward fully avoids that, since the node itself is gone. Skipping just
+    // that one node's issue this round means it simply gets underlined on the next check,
+    // once the user has typed past it and the caret has moved to a different node.
+    const activeSel = hadFocus ? window.getSelection() : null;
+    const activeRange = activeSel && activeSel.rangeCount > 0 ? activeSel.getRangeAt(0) : null;
+
     // For each issue, search each text node individually — no offset mapping
     for (const issue of sorted) {
       let wrapped = false;
       for (const node of textNodes) {
         if (wrapped) break;
+        if (activeRange && activeRange.startContainer === node) continue;
         const tc = node.textContent;
         const localIdx = tc.indexOf(issue.original);
         if (localIdx === -1) continue;
