@@ -100,6 +100,40 @@ const AMBIGUOUS_WORD_FIXES: Record<string, string> = {
   whose: "who's",
 };
 
+// Found via an adversarial test pass (deliberately trying to break the checker before any
+// public launch): the generic edit-distance "typo fix" below also silently turned "there"
+// into "the", "the" into "them", and "at" into "a" — all tagged Safe auto-fix, all producing
+// broken or nonsensical sentences ("went to them store", "could be a risk"). The common
+// thread: short, high-frequency function words (articles, prepositions, conjunctions,
+// pronouns) are exactly the words most likely to have ANOTHER different, equally-valid short
+// word within 1-2 edits — "the"/"them"/"then"/"they", "there"/"the"/"their"/"three", "at"/"a"/
+// "as"/"an" all cluster together. Edit distance alone can't tell "typo fix" apart from
+// "swapped to a different real word with a different meaning" for this word class, unlike
+// longer content words ("beautifull" -> "beautiful") where a nearby real word is much rarer.
+// Numbers have the same problem for the opposite reason: a business document's "20%" silently
+// becoming "22%" isn't a spelling fix, it's fabricated data, and no small-model edit-distance
+// heuristic should ever be trusted to "correct" a number.  Rather than deny-list every
+// possible bad output after the fact, this blocks the entire generic edit-distance path for
+// this word class up front — the already-vetted lemma-group and contraction paths above are
+// unaffected, so "a" -> "an" etc. still works. Anything genuinely wrong with one of these
+// words is left for DeepSeek (full sentence context, human-reviewed suggestion, not auto-safe)
+// instead of guessed at here.
+const HIGH_RISK_SHORT_WORDS = new Set([
+  // Articles
+  "a", "an", "the",
+  // Prepositions
+  "at", "by", "of", "on", "in", "to", "up", "off", "out", "for", "from", "with", "into", "onto", "over", "under",
+  // Conjunctions
+  "and", "but", "or", "nor", "so", "yet", "if", "as",
+  // Pronouns (subject/object/possessive)
+  "i", "he", "him", "his", "she", "her", "we", "us", "our", "they", "them", "their",
+  "you", "your", "it", "its", "this", "that", "these", "those",
+  // Common short question/relative words
+  "who", "what", "when", "where", "why", "how", "which",
+  // Common short adverbs frequently confused with the above
+  "there", "here", "then", "than",
+]);
+
 interface Classification {
   safe: boolean;
   // Internal/debug description (edit distances, etc.) — useful in logs, but never shown
@@ -126,6 +160,14 @@ function classify(original: string, replacement: string): Classification {
 
   if (sameLemmaGroup(o, r)) {
     return { safe: true, reason: "closed-class verb/article agreement", category: "grammar", explanation: "Verb or article agreement." };
+  }
+
+  // Block the generic edit-distance path entirely for high-risk short function words and
+  // for numbers — see the comment on HIGH_RISK_SHORT_WORDS above. This must come AFTER the
+  // lemma-group check (so "a" -> "an" etc. still works via that already-vetted path) but
+  // BEFORE the generic edit-distance check below (which is what this is guarding against).
+  if (HIGH_RISK_SHORT_WORDS.has(o.toLowerCase()) || /^\d+$/.test(o)) {
+    return { safe: false, reason: `blocked generic typo-fix for high-risk short word/number "${o}" -> "${r}"` };
   }
 
   const dist = editDistance(o, r);
