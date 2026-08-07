@@ -154,8 +154,13 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     { pattern: /(\w) \)/g, replacement: "$1)", category: "punctuation", rule: "space_before_paren", explanation: "Remove space before closing parenthesis." },
     // Double spaces
     { pattern: /  +/g, replacement: " ", category: "style", rule: "double_space", explanation: "Remove extra spaces." },
-    // Missing period at end of sentence
-    { pattern: /^([A-Z][^.!?}\n"]+)$/gm, replacement: "$1.", category: "punctuation", rule: "missing_period", explanation: "Sentences should end with a period." },
+    // Missing period at end of sentence. The negative lookbehind excludes lines that
+    // already end in a comma, colon, or semicolon — e.g. an email salutation like
+    // "Hello Abraham," is correctly terminated for its purpose and should never get a
+    // period appended right after the comma ("Hello Abraham,."). The base character
+    // class only ever checked for . ! ? } " anywhere in the line, not what the line
+    // actually ends with, which is what let this false positive through.
+    { pattern: /^([A-Z][^.!?}\n"]+)(?<![,:;])$/gm, replacement: "$1.", category: "punctuation", rule: "missing_period", explanation: "Sentences should end with a period." },
     // Double punctuation
     { pattern: /\.\./g, replacement: "...", category: "punctuation", rule: "double_period", explanation: "Use an ellipsis (...) not double periods." },
     // Missing comma after introductory/conditional clause
