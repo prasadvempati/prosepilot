@@ -127,6 +127,15 @@ const comparisonSections = [
   },
 ];
 
+interface PricingProps {
+  // When set, a signed-in visitor sees "Go to editor" (calling onStartWriting) instead of
+  // "Get started free" -> /signup on the Free tier — they already have an account, so sending
+  // them to a signup page would be a dead end. Every other tier's CTA (Coming soon / Contact
+  // sales) is unaffected by auth state.
+  isSignedIn?: boolean;
+  onStartWriting?: () => void;
+}
+
 function CellValue({ value }: { value: string | boolean }) {
   if (typeof value === "boolean") {
     return value ? (
@@ -146,7 +155,7 @@ function CellValue({ value }: { value: string | boolean }) {
   return <span className="text-sm text-ink-700">{value}</span>;
 }
 
-export function Pricing() {
+export function Pricing({ isSignedIn, onStartWriting }: PricingProps = {}) {
   return (
     <section id="pricing" className="py-24 bg-surface-50 relative overflow-hidden">
       <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-brand-100 rounded-full blur-3xl opacity-40 -translate-y-1/2 translate-x-1/2" />
@@ -203,7 +212,11 @@ export function Pricing() {
               </div>
 
               <div className="pt-4 border-t border-surface-200">
-                {tier.cta.href ? (
+                {isSignedIn && tier.cta.href === "/signup" && onStartWriting ? (
+                  <button onClick={onStartWriting} className={`w-full ${tier.cta.style} py-2.5 text-sm`}>
+                    Go to editor
+                  </button>
+                ) : tier.cta.href ? (
                   <a
                     href={tier.cta.href}
                     className={`w-full ${tier.cta.style} py-2.5 text-center block text-sm`}

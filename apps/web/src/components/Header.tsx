@@ -4,14 +4,20 @@ import { SignInButton, SignUpButton, UserButton, useAuth } from "@clerk/react";
 interface HeaderProps {
   // Called instead of the normal "/" navigation when a signed-in user clicks the logo.
   // Without this, the logo was a plain <a href="/"> — since App.tsx has no client-side
-  // router, "/" always re-renders the exact same signed-in tool view, so clicking it just
-  // did a full page reload back to where you already were (a jarring flicker, and no actual
-  // "home" to go to). Signed-out users keep the normal link behavior — "/" is a real,
-  // different page for them (the marketing site) so a reload there is fine/expected.
+  // router, "/" always re-renders whatever App.tsx currently shows, so clicking it just did a
+  // full page reload back to where you already were (a jarring flicker, not real navigation).
+  // Signed-out users keep the normal link behavior — "/" is a real, different page for them
+  // (the marketing site) so a reload there is fine/expected.
   onLogoClick?: () => void;
+  // Whether the marketing nav (Features/Pricing anchors) should show. These anchors only
+  // exist in the DOM when the landing page is actually rendered — true for every signed-out
+  // visitor, and also true for a signed-in visitor who is currently on the home view (they
+  // land there first now, before clicking "Start Writing"). Defaults to true so existing
+  // signed-out callers behave exactly as before if this prop is omitted.
+  showMarketingNav?: boolean;
 }
 
-export function Header({ onLogoClick }: HeaderProps = {}) {
+export function Header({ onLogoClick, showMarketingNav = true }: HeaderProps = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isSignedIn } = useAuth();
 
@@ -38,14 +44,10 @@ export function Header({ onLogoClick }: HeaderProps = {}) {
             <span className="text-lg font-bold text-ink-900 tracking-tight">ProsePilot</span>
           </a>
 
-          {/* Desktop Nav */}
-          {/* App.tsx renders EITHER the signed-in app view OR the marketing landing page at the
-              same "/" route, based on isSignedIn — there's no separate route for each. That means
-              #features and #pricing only ever exist in the DOM when signed OUT. A signed-in user
-              can never reach them no matter what the href is (an absolute "/#pricing" still lands
-              back on the app view, not the marketing page). So: only show these links when signed
-              out, matching how most SaaS apps drop marketing nav once you're inside the product. */}
-          {!isSignedIn && (
+          {/* Desktop Nav — Features/Pricing anchors only exist in the DOM when the landing page
+              is actually rendered (see showMarketingNav prop doc above), so gate on that rather
+              than on isSignedIn directly. */}
+          {showMarketingNav && (
             <nav className="hidden md:flex items-center gap-1">
               <a href="/#features" className="btn-ghost text-sm">Features</a>
               <a href="/#pricing" className="btn-ghost text-sm">Pricing</a>
@@ -107,7 +109,7 @@ export function Header({ onLogoClick }: HeaderProps = {}) {
         {mobileMenuOpen && (
           <div className="md:hidden py-4 border-t border-surface-200/50 animate-slide-up">
             <div className="flex flex-col gap-2">
-              {!isSignedIn && (
+              {showMarketingNav && (
                 <>
                   <a href="/#features" className="btn-ghost text-sm justify-start" onClick={() => setMobileMenuOpen(false)}>Features</a>
                   <a href="/#pricing" className="btn-ghost text-sm justify-start" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
