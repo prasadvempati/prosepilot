@@ -102,7 +102,15 @@ const AMBIGUOUS_WORD_FIXES: Record<string, string> = {
 
 interface Classification {
   safe: boolean;
+  // Internal/debug description (edit distances, etc.) — useful in logs, but never shown
+  // to the user directly (see `category`/`explanation` below for that).
   reason: string;
+  // User-facing fields, only meaningful when safe === true. Kept separate from `reason`
+  // so the UI shows a clean sentence ("Missing apostrophe...") instead of raw internals
+  // like "Local model fix: typo fix (edit distance 1)" — the latter shipped briefly and
+  // looked unfinished next to the rule engine's and DeepSeek's human-readable headlines.
+  category?: "grammar" | "spelling";
+  explanation?: string;
 }
 
 function classify(original: string, replacement: string): Classification {
@@ -112,17 +120,19 @@ function classify(original: string, replacement: string): Classification {
   const expectedContraction = AMBIGUOUS_WORD_FIXES[o.toLowerCase()];
   if (expectedContraction !== undefined) {
     return r.toLowerCase() === expectedContraction
-      ? { safe: true, reason: "contraction fix" }
+      ? { safe: true, reason: "contraction fix", category: "grammar", explanation: `Missing apostrophe: should be "${expectedContraction}".` }
       : { safe: false, reason: `rejected ambiguous-word fix for "${o}" (only "${expectedContraction}" is trusted here)` };
   }
 
-  if (sameLemmaGroup(o, r)) return { safe: true, reason: "closed-class verb/article agreement" };
+  if (sameLemmaGroup(o, r)) {
+    return { safe: true, reason: "closed-class verb/article agreement", category: "grammar", explanation: "Verb or article agreement." };
+  }
 
   const dist = editDistance(o, r);
   const sameStart = o[0]?.toLowerCase() === r[0]?.toLowerCase();
   const lenDiff = Math.abs(o.length - r.length);
   if (dist <= 2 && sameStart && lenDiff <= 2 && o.length >= 2) {
-    return { safe: true, reason: `typo fix (edit distance ${dist})` };
+    return { safe: true, reason: `typo fix (edit distance ${dist})`, category: "spelling", explanation: "Possible misspelling." };
   }
 
   return { safe: false, reason: `unrecognized word substitution (edit distance ${dist})` };
@@ -173,7 +183,7 @@ function diffToIssues(original: string, corrected: string, sourceHash: string): 
       const toTrim = addedText.trim();
       if (!fromTrim || !toTrim) continue; // pure whitespace change or deletion — not worth surfacing
 
-      const { safe, reason } = classify(fromTrim, toTrim);
+      const classification = classify(fromTrim, toTrim);
       // Only ever surface the model's high-confidence, narrowly-scoped fixes. Anything it's
       // NOT sure about gets silently dropped rather than shown as a suggestion — testing
       // showed this small model can hallucinate wildly on edge cases (e.g. "a book" ->
@@ -181,11 +191,11 @@ function diffToIssues(original: string, corrected: string, sourceHash: string): 
       // "worth a second look" suggestion tier more reliably. Better to say nothing than
       // to show a nonsensical suggestion that erodes trust in the tool, even if it's
       // technically never auto-applied.
-      if (!safe) continue;
+      if (!classification.safe) continue;
 
       issues.push({
         id: `local_${randomUUID().slice(0, 8)}`,
-        category: "grammar",
+        category: classification.category ?? "grammar",
         rule: "local_model_safe_fix",
         startUtf16: start,
         endUtf16: end,
@@ -194,7 +204,7 @@ function diffToIssues(original: string, corrected: string, sourceHash: string): 
         confidence: 0.9,
         safeAuto: true,
         severity: "info",
-        explanation: `Local model fix: ${reason}`,
+        explanation: classification.explanation ?? "Possible grammar or spelling fix.",
         sourceHash,
       });
     }
