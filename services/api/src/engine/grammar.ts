@@ -7,6 +7,40 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY!;
 const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 const LANGUAGETOOL_URL = process.env.LANGUAGETOOL_URL || "http://localhost:8010";
 
+// --- DeepSeek result cache ---
+// checkGrammar's "review" mode calls DeepSeek unconditionally on every check (deliberate —
+// it catches things the rule engine/LanguageTool miss), which means cost scales directly
+// with request volume. DeepSeek announced a "significant" API price increase (Aug 2026,
+// exact new rates not yet published), so avoiding pointless re-billing for text that was
+// just checked matters more than it used to. This cache is purely in-memory, capped, and
+// short-lived — it is NOT persisted to disk or a database, so it stays consistent with the
+// "your writing is never stored" privacy promise on the marketing site. It only helps when
+// the exact same text is re-submitted (re-clicking Check Grammar without changes, re-opening
+// the same selection, etc.) — any edit changes the hash and falls through to a real check.
+const DEEPSEEK_CACHE_MAX = 500;
+const DEEPSEEK_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const deepSeekCache = new Map<string, { issues: GrammarIssue[]; expiresAt: number }>();
+
+function getCachedDeepSeekIssues(hash: string): GrammarIssue[] | null {
+  const entry = deepSeekCache.get(hash);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    deepSeekCache.delete(hash);
+    return null;
+  }
+  return entry.issues;
+}
+
+function setCachedDeepSeekIssues(hash: string, issues: GrammarIssue[]) {
+  if (deepSeekCache.size >= DEEPSEEK_CACHE_MAX) {
+    // Map preserves insertion order — evicting the first key evicts the oldest entry.
+    // Simple bounded cap, no need for a full LRU implementation at this scale.
+    const oldestKey = deepSeekCache.keys().next().value;
+    if (oldestKey !== undefined) deepSeekCache.delete(oldestKey);
+  }
+  deepSeekCache.set(hash, { issues, expiresAt: Date.now() + DEEPSEEK_CACHE_TTL_MS });
+}
+
 // --- LanguageTool Integration ---
 
 interface LTMatch {
@@ -262,14 +296,14 @@ function computeHashSync(text: string): string {
   return `sha256:${Math.abs(hash).toString(16).padStart(8, "0")}`;
 }
 
-export async function checkGrammar(request: CheckRequest & { lightweight?: boolean; rulesOnly?: boolean; voiceProfile?: VoiceProfile | null }): Promise<CheckResponse> {
+export async function checkGrammar(request: CheckRequest & { lightweight?: boolean; rulesOnly?: boolean; localOnly?: boolean; voiceProfile?: VoiceProfile | null }): Promise<CheckResponse> {
   const startTime = Date.now();
-  const { text, mode, lightweight, rulesOnly, voiceProfile } = request;
+  const { text, mode, lightweight, rulesOnly, localOnly, voiceProfile } = request;
 
   // Tier 0: Rule-based (instant, free)
   const ruleIssues = detectRuleBasedIssues(text);
 
-  // If rulesOnly mode (for docx processing), skip all API calls
+  // If rulesOnly mode, skip everything else — rule engine's regex fixes only.
   if (rulesOnly) {
     const filteredIssues = voiceProfile
       ? ruleIssues.filter(issue => shouldShowIssue(voiceProfile, issue))
@@ -285,6 +319,34 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
         checkMode: mode,
         latencyMs,
         engineTier: "rule",
+      },
+    };
+  }
+
+  // If localOnly mode (used by the document checker's first pass, per-paragraph), run the
+  // two free/in-process tiers — rule engine + local small model — and stop there, without
+  // touching LanguageTool or DeepSeek at all. The caller decides whether to escalate a given
+  // paragraph to the full pipeline based on whether this pass found anything: a paragraph
+  // the free tiers already fixed doesn't need DeepSeek's "second opinion" as urgently as one
+  // that came back looking clean, which is exactly where DeepSeek earns its cost (catching
+  // things rule-based/pattern matching can't).
+  if (localOnly) {
+    const localModelIssues = await checkWithLocalModel(text);
+    const merged = mergeAllIssues(ruleIssues, localModelIssues, [], []);
+    const filteredIssues = voiceProfile
+      ? merged.filter(issue => shouldShowIssue(voiceProfile, issue))
+      : merged;
+    const latencyMs = Date.now() - startTime;
+    const sourceHash = await computeHash(text);
+    return {
+      issues: filteredIssues,
+      updatedHash: sourceHash,
+      usage: {
+        characterCount: text.length,
+        issueCount: filteredIssues.length,
+        checkMode: mode,
+        latencyMs,
+        engineTier: localModelIssues.length > 0 ? "local-model" : "rule",
       },
     };
   }
@@ -344,6 +406,12 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
 
 async function callDeepSeekForIssues(text: string): Promise<GrammarIssue[]> {
   try {
+    // Computed up front (not just for tagging issues, as before) so we can check the cache
+    // before spending a DeepSeek call at all.
+    const sourceHash = await computeHash(text);
+    const cached = getCachedDeepSeekIssues(sourceHash);
+    if (cached) return cached;
+
     const prompt = `You are a professional grammar and style checker. Analyze the following text for grammar, spelling, punctuation, clarity, style, and tone issues.
 
 Return a JSON array of issues. Each issue must have:
@@ -397,7 +465,8 @@ Return ONLY the JSON array, no other text.`;
       { role: "user", content: prompt },
     ]);
 
-    const sourceHash = await computeHash(text);
+    // sourceHash was already computed above (before the cache check) — reused here for
+    // tagging issues, same as before.
 
     // DeepSeek is told "Return ONLY the JSON array, no other text" but LLMs are unreliable
     // about following that literally — it can wrap the array in a ```json ... ``` markdown
@@ -478,6 +547,7 @@ Return ONLY the JSON array, no other text.`;
       });
     }
 
+    setCachedDeepSeekIssues(sourceHash, validated);
     return validated;
   } catch (error) {
     // DeepSeek unavailable — return empty results

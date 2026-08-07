@@ -2,6 +2,35 @@ import JSZip from "jszip";
 import { checkGrammar } from "./grammar.js";
 import type { VoiceProfile } from "@prosepilot/writing-core";
 
+// Same overall size convention used for direct text checks (services/api/src/routes/check.ts)
+// — a cumulative cap across all paragraphs rather than a fixed paragraph count, so a normal
+// document (which is the vast majority of real uploads) gets checked in FULL instead of
+// silently truncating after an arbitrary first N paragraphs, while an extreme outlier
+// document still has a sane upper bound.
+const MAX_DOCX_CHECK_CHARS = 100000;
+
+// Simple concurrency-limited map — checking every paragraph of a real document sequentially
+// (one at a time, each with its own network round-trips) would make a multi-page document
+// take a very long time. No new dependency needed for something this small.
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  async function worker() {
+    for (;;) {
+      const i = nextIndex++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 interface DocxParagraph {
   index: number;
   text: string;
@@ -150,36 +179,66 @@ export async function processDocx(docxBuffer: Buffer, voiceProfile?: VoiceProfil
   }
   const docXml = await docXmlFile.async("string");
 
-  // 3. Extract paragraphs
+  // 3. Extract paragraphs. Cumulative char cap instead of a fixed paragraph count — checks
+  // the WHOLE document for the vast majority of real uploads, with a sane upper bound for
+  // outliers instead of an arbitrary "first 10 paragraphs only" truncation.
   const paragraphs = extractParagraphs(docXml);
-  const paragraphsChecked = paragraphs.filter((p) => p.text.length >= 10).slice(0, 10); // Max 10 paragraphs
+  const paragraphsChecked: typeof paragraphs = [];
+  let cumulativeChars = 0;
+  for (const p of paragraphs) {
+    if (p.text.length < 10) continue;
+    if (cumulativeChars + p.text.length > MAX_DOCX_CHECK_CHARS) break;
+    paragraphsChecked.push(p);
+    cumulativeChars += p.text.length;
+  }
 
-  // 4. Check grammar on each paragraph (with per-paragraph timeout)
+  // 4. Check grammar on each paragraph, concurrently, with a two-pass tiered strategy:
+  //   Pass 1 (always, free): rule engine + local small model, in-process, no network call.
+  //   Pass 2 (only if pass 1 found nothing): escalate to the full pipeline (LanguageTool +
+  //   DeepSeek) for a deeper "second opinion." A paragraph the free tiers already found and
+  //   fixed issues in doesn't need that deeper pass as urgently as one that came back looking
+  //   clean — that's exactly where DeepSeek earns its cost, catching what pattern-matching
+  //   can't. This keeps DeepSeek spend roughly proportional to how much of the document
+  //   actually needs it, instead of billing the entire document regardless.
   const allIssues: DocxIssue[] = [];
   const categories: Record<string, number> = {};
 
-  for (const para of paragraphsChecked) {
+  const perParagraphResults = await mapWithConcurrency(paragraphsChecked, 5, async (para) => {
     try {
-      const result = await Promise.race([
-        checkGrammar({ text: para.text, mode: "review", rulesOnly: true, voiceProfile }),
+      const localResult = await Promise.race([
+        checkGrammar({ text: para.text, mode: "review", localOnly: true, voiceProfile }),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
       ]);
-      for (const issue of result.issues) {
-        allIssues.push({
-          paragraphIndex: para.index,
-          paragraphText: para.text,
-          category: issue.category,
-          original: issue.original,
-          replacement: issue.replacement,
-          explanation: issue.explanation,
-          confidence: issue.confidence,
-        });
-        categories[issue.category] = (categories[issue.category] || 0) + 1;
-      }
+
+      if (localResult.issues.length > 0) return localResult.issues;
+
+      // Free tiers found nothing — worth a deeper look.
+      const fullResult = await Promise.race([
+        checkGrammar({ text: para.text, mode: "review", voiceProfile }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
+      ]);
+      return fullResult.issues;
     } catch (err) {
-      // Skip failed paragraphs silently
+      // Skip failed/timed-out paragraphs silently — same behavior as before.
+      return [];
     }
-  }
+  });
+
+  perParagraphResults.forEach((issues, i) => {
+    const para = paragraphsChecked[i];
+    for (const issue of issues) {
+      allIssues.push({
+        paragraphIndex: para.index,
+        paragraphText: para.text,
+        category: issue.category,
+        original: issue.original,
+        replacement: issue.replacement,
+        explanation: issue.explanation,
+        confidence: issue.confidence,
+      });
+      categories[issue.category] = (categories[issue.category] || 0) + 1;
+    }
+  });
 
   // 5. Generate clean .docx (all fixes applied)
   let cleanXml = docXml;
