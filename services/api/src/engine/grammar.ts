@@ -147,6 +147,15 @@ async function callDeepSeek(messages: Array<{ role: string; content: string }>, 
 
 // --- Grammar Check Engine ---
 
+// Preserves the matched text's capitalization pattern when substituting in a canonical
+// (lowercase) contraction spelling — e.g. "Dont" -> "Don't", "DONT" -> "DON'T", "dont" ->
+// "don't". Used by the missing-apostrophe-contraction rules below.
+function applyContractionCase(matched: string, canonical: string): string {
+  if (matched === matched.toUpperCase()) return canonical.toUpperCase();
+  if (matched[0] === matched[0]?.toUpperCase()) return canonical[0].toUpperCase() + canonical.slice(1);
+  return canonical;
+}
+
 // Tier 0: Rule-based fixes (instant, free, no API call)
 function detectRuleBasedIssues(text: string): GrammarIssue[] {
   const issues: GrammarIssue[] = [];
@@ -199,6 +208,44 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     { pattern: /\.\./g, replacement: "...", category: "punctuation", rule: "double_period", explanation: "Use an ellipsis (...) not double periods." },
     // Missing comma after introductory/conditional clause
     { pattern: /\b(If|When|While|Although|Because|Since|Unless|After|Before|Until|Once|Whenever|Wherever|Whether)\s+([^,]+?)\s+([A-Z][a-z]*)/g, replacement: "$1 $2, $3", category: "punctuation", rule: "comma_after_conditional", explanation: "Use a comma after an introductory or conditional clause." },
+
+    // === MISSING APOSTROPHE IN CONTRACTIONS (unambiguous cases only) ===
+    // Found via a live bug: the local small-model tier (localGrammarModel.ts) was observed
+    // "fixing" the typo "dont" into "do" instead of "don't" — silently DROPPING THE NEGATION
+    // and inverting the sentence's meaning ("I dont want to loose this" -> "I do want to
+    // lose this"), while still being tagged "Safe auto-fix". The model's small-edit-distance
+    // safety heuristic can't tell "restore the apostrophe" apart from "delete two letters",
+    // and both look equally "safe" by that metric alone.
+    //
+    // These specific words have NO valid standalone English reading without the apostrophe
+    // (unlike e.g. "its", which is a legitimate possessive on its own — that ambiguous case
+    // is handled separately, in localGrammarModel.ts's classify(), not here) — so restoring
+    // the apostrophe is always correct, deterministically, without needing any model at all.
+    // This also fixes the bug directly: mergeAllIssues() gives the rule engine priority over
+    // the local model at the same text span, so once this rule fires on "dont", the local
+    // model's wrong "dont"->"do" suggestion at that same span is dropped by the merge dedup
+    // rather than shown alongside (or instead of) the correct fix.
+    { pattern: /\bdont\b/gi, replacement: (m: string) => applyContractionCase(m, "don't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"don't\"." },
+    { pattern: /\bcant\b/gi, replacement: (m: string) => applyContractionCase(m, "can't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"can't\"." },
+    { pattern: /\bwont\b/gi, replacement: (m: string) => applyContractionCase(m, "won't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"won't\"." },
+    { pattern: /\bisnt\b/gi, replacement: (m: string) => applyContractionCase(m, "isn't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"isn't\"." },
+    { pattern: /\barent\b/gi, replacement: (m: string) => applyContractionCase(m, "aren't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"aren't\"." },
+    { pattern: /\bwasnt\b/gi, replacement: (m: string) => applyContractionCase(m, "wasn't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"wasn't\"." },
+    { pattern: /\bwerent\b/gi, replacement: (m: string) => applyContractionCase(m, "weren't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"weren't\"." },
+    { pattern: /\bdoesnt\b/gi, replacement: (m: string) => applyContractionCase(m, "doesn't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"doesn't\"." },
+    { pattern: /\bdidnt\b/gi, replacement: (m: string) => applyContractionCase(m, "didn't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"didn't\"." },
+    { pattern: /\bhasnt\b/gi, replacement: (m: string) => applyContractionCase(m, "hasn't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"hasn't\"." },
+    { pattern: /\bhavent\b/gi, replacement: (m: string) => applyContractionCase(m, "haven't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"haven't\"." },
+    { pattern: /\bhadnt\b/gi, replacement: (m: string) => applyContractionCase(m, "hadn't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"hadn't\"." },
+    { pattern: /\bwouldnt\b/gi, replacement: (m: string) => applyContractionCase(m, "wouldn't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"wouldn't\"." },
+    { pattern: /\bcouldnt\b/gi, replacement: (m: string) => applyContractionCase(m, "couldn't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"couldn't\"." },
+    { pattern: /\bshouldnt\b/gi, replacement: (m: string) => applyContractionCase(m, "shouldn't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"shouldn't\"." },
+    { pattern: /\bshant\b/gi, replacement: (m: string) => applyContractionCase(m, "shan't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"shan't\"." },
+    { pattern: /\byoure\b/gi, replacement: (m: string) => applyContractionCase(m, "you're"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"you're\"." },
+    { pattern: /\btheyre\b/gi, replacement: (m: string) => applyContractionCase(m, "they're"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"they're\"." },
+    { pattern: /\bweve\b/gi, replacement: (m: string) => applyContractionCase(m, "we've"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"we've\"." },
+    { pattern: /\bwhats\b/gi, replacement: (m: string) => applyContractionCase(m, "what's"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"what's\"." },
+    { pattern: /\bthats\b/gi, replacement: (m: string) => applyContractionCase(m, "that's"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"that's\"." },
 
     // === WORD FORM ERRORS ===
     // Gerund after possessive/preposition — should be noun

@@ -83,6 +83,23 @@ function sameLemmaGroup(a: string, b: string): boolean {
   return LEMMA_GROUPS.some((g) => g.includes(al) && g.includes(bl));
 }
 
+// Words where a small edit-distance "fix" can look just as numerically "safe" whether it
+// restores meaning or destroys it. Found via a live bug: this model corrected "Its" -> "It"
+// (dropping the apostrophe-s the sentence actually needed — "Its a beautiful day" is still
+// wrong afterward) while tagging it "Safe auto-fix". Unlike "dont"/"cant"/etc. (which have
+// NO valid standalone spelling and are handled deterministically in grammar.ts's rule engine
+// instead), these words ARE valid English on their own ("its" the possessive, "your", etc.),
+// so we can't blanket-rewrite them — but we also can't trust the model's generic edit-distance
+// judgment for them. Compromise: for exactly these words, only accept the fix if it's exactly
+// the expected contraction; anything else the model proposes for them is rejected outright
+// rather than risking a meaning-changing "fix" slipping through as auto-safe.
+const AMBIGUOUS_WORD_FIXES: Record<string, string> = {
+  its: "it's",
+  your: "you're",
+  their: "they're",
+  whose: "who's",
+};
+
 interface Classification {
   safe: boolean;
   reason: string;
@@ -91,6 +108,14 @@ interface Classification {
 function classify(original: string, replacement: string): Classification {
   const o = original.trim();
   const r = replacement.trim();
+
+  const expectedContraction = AMBIGUOUS_WORD_FIXES[o.toLowerCase()];
+  if (expectedContraction !== undefined) {
+    return r.toLowerCase() === expectedContraction
+      ? { safe: true, reason: "contraction fix" }
+      : { safe: false, reason: `rejected ambiguous-word fix for "${o}" (only "${expectedContraction}" is trusted here)` };
+  }
+
   if (sameLemmaGroup(o, r)) return { safe: true, reason: "closed-class verb/article agreement" };
 
   const dist = editDistance(o, r);
