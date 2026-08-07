@@ -26,6 +26,7 @@ export type RewriteTone =
   | "persuasive"
   | "casual"
   | "firm"
+  | "elevated"
   | "custom";
 
 export interface GrammarIssue {
@@ -65,6 +66,14 @@ export interface RewriteRequest {
   language?: string;
 }
 
+// A single vocabulary upgrade made by the "elevated" tone — the surface word/phrase as it
+// appears in the rewritten text, plus a short plain-English definition so a reader can hover
+// it instead of getting stuck on an unfamiliar word. Only populated for tone: "elevated".
+export interface ElevatedWordGloss {
+  word: string;
+  definition: string;
+}
+
 export interface RewriteResult {
   original: string;
   rewritten: string;
@@ -73,6 +82,7 @@ export interface RewriteResult {
   factMismatch: boolean;
   meaningSimilarity: number;
   alternatives?: string[];
+  elevatedWords?: ElevatedWordGloss[];
 }
 
 export interface RewriteResponse {

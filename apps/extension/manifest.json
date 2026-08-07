@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ProsePilot",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Your Writing Co-Pilot — Fix grammar, clarity, and tone instantly on any website.",
   "icons": {
     "16": "icons/icon16.png",

@@ -97,7 +97,7 @@ export async function checkRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "TEXT_TOO_LARGE", message: "Text exceeds 50,000 character limit for rewrite" });
     }
 
-    const validTones = ["professional", "executive", "concise", "diplomatic", "formal", "affirmative", "friendly", "confident", "empathetic", "persuasive", "casual", "firm", "custom"];
+    const validTones = ["professional", "executive", "concise", "diplomatic", "formal", "affirmative", "friendly", "confident", "empathetic", "persuasive", "casual", "firm", "elevated", "custom"];
     if (!validTones.includes(tone)) {
       return reply.status(400).send({ error: "INVALID_TONE", message: `Invalid tone. Must be one of: ${validTones.join(", ")}` });
     }

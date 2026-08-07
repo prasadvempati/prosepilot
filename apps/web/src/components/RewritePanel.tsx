@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { RewriteResult, ProtectedFact } from "@prosepilot/writing-core";
+import type { ReactNode } from "react";
+import type { RewriteResult, ProtectedFact, ElevatedWordGloss } from "@prosepilot/writing-core";
 
 interface RewritePanelProps {
   result: RewriteResult | null;
@@ -7,6 +8,58 @@ interface RewritePanelProps {
   originalText: string;
   onReplace: (newText: string) => void;
   error?: string | null;
+}
+
+// Escapes a string for safe use inside a RegExp literal.
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Renders rewritten text as plain string segments, except where an "elevated" vocabulary word
+// (from the DeepSeek-supplied glossary) appears — those get wrapped in a dashed-underline span
+// with a hover tooltip showing the definition. Matching is done against the surface text (not
+// re-derived from the glossary word) so the original casing/punctuation is preserved exactly.
+function renderRewrittenText(text: string, glossary?: ElevatedWordGloss[]): ReactNode {
+  if (!glossary || glossary.length === 0) return text;
+
+  // Longest-word-first so e.g. "paucity" doesn't get partially matched inside a longer glossary
+  // entry that happens to contain it as a substring.
+  const sorted = [...glossary]
+    .filter((g) => g.word.trim().length > 0)
+    .sort((a, b) => b.word.length - a.word.length);
+  if (sorted.length === 0) return text;
+
+  const definitionByLower = new Map(sorted.map((g) => [g.word.toLowerCase(), g.definition]));
+  const pattern = sorted.map((g) => escapeRegExp(g.word)).join("|");
+  const regex = new RegExp(`\\b(?:${pattern})\\b`, "gi");
+  const parts = text.split(regex);
+  const matches = text.match(regex) ?? [];
+
+  const nodes: ReactNode[] = [];
+  parts.forEach((part, i) => {
+    nodes.push(part);
+    const match = matches[i];
+    if (match) {
+      const definition = definitionByLower.get(match.toLowerCase());
+      if (definition) {
+        nodes.push(
+          <span key={`gloss-${i}`} className="relative inline-block group">
+            <span className="border-b border-dashed border-brand-400 text-brand-700 font-medium cursor-help">
+              {match}
+            </span>
+            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 hidden group-hover:block w-max max-w-[220px] whitespace-normal text-center rounded-lg bg-ink-900 text-white text-xs leading-snug px-2.5 py-1.5 shadow-lg z-10">
+              {definition}
+              <span className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-4 border-transparent border-t-ink-900" />
+            </span>
+          </span>
+        );
+      } else {
+        nodes.push(match);
+      }
+    }
+  });
+
+  return nodes;
 }
 
 export function RewritePanel({ result, isRewriting, onReplace, error }: RewritePanelProps) {
@@ -83,8 +136,17 @@ export function RewritePanel({ result, isRewriting, onReplace, error }: RewriteP
       {/* Content */}
       <div className="p-5">
         <div className="text-sm leading-relaxed text-ink-700 whitespace-pre-wrap p-4 bg-surface-50 rounded-xl border border-surface-200">
-          {result.rewritten}
+          {renderRewrittenText(result.rewritten, result.elevatedWords)}
         </div>
+
+        {result.elevatedWords && result.elevatedWords.length > 0 && (
+          <p className="text-xs text-ink-400 mt-2 flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Hover the underlined words for a plain-English definition.
+          </p>
+        )}
 
         {result.factsProtected.length > 0 && (
           <div className="mt-4 p-4 bg-surface-50 rounded-xl border border-surface-200">

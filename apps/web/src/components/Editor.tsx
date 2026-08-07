@@ -25,6 +25,7 @@ const TONES = [
   { value: "persuasive", label: "Persuasive" },
   { value: "casual", label: "Casual" },
   { value: "firm", label: "Firm" },
+  { value: "elevated", label: "Elevated" },
 ];
 
 export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewriting, mode, tone = "professional", onToneChange }: EditorProps) {

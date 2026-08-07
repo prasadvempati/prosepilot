@@ -1,5 +1,6 @@
-import type { CheckRequest, CheckResponse, GrammarIssue, RewriteRequest, RewriteResponse, ProtectedFact, VoiceProfile } from "@prosepilot/writing-core";
+import type { CheckRequest, CheckResponse, GrammarIssue, RewriteRequest, RewriteResponse, ProtectedFact, VoiceProfile, ElevatedWordGloss } from "@prosepilot/writing-core";
 import { extractProtectedFacts, validateFacts, computeHash, shouldShowIssue } from "@prosepilot/writing-core";
+import { ELEVATED_VOCABULARY_EXAMPLES } from "./elevatedVocabulary.js";
 import { randomUUID } from "crypto";
 import { checkWithLocalModel } from "./localGrammarModel.js";
 
@@ -669,7 +670,31 @@ export async function rewriteText(request: RewriteRequest): Promise<RewriteRespo
     persuasive: "Compelling and convincing, building toward a call to action",
     casual: "Relaxed and informal, suitable for internal team communication",
     firm: "Direct and clear about expectations, while remaining respectful",
+    // "Elevated" swaps wordy phrases for a single precise word (the way GRE vocabulary
+    // condenses a whole clause into one term) but is deliberately capped at "business-polished"
+    // rather than maximal vocabulary — the goal is a reader thinking "sharp," never "what does
+    // that word mean." Concrete example pairs are given directly in the description (rather than
+    // a vague "use elevated language" instruction) because that's the same lesson learned from
+    // the local grammar model's short-word bug this pass: vague heuristics drift, concrete
+    // examples don't. The examples themselves live in elevatedVocabulary.ts — a standalone,
+    // append-only list — specifically so adding more words later never requires touching this
+    // prompt-building logic.
+    elevated: `Upgrade wordy phrases to a single, precise word wherever a natural one exists. Examples:\n${ELEVATED_VOCABULARY_EXAMPLES.map((e) => `- "${e.phrase}" -> "${e.word}"`).join("\n")}\nEvery substitution must still be instantly clear to a business reader on first read — never reach for an obscure, archaic, or overly literary word just to sound impressive, and never force a substitution that doesn't fit naturally. If no common precise word exists for a phrase, leave it as clear, professional prose rather than straining for one.`,
   };
+
+  // "Elevated" also asks the model to hand back a small glossary of the words it introduced,
+  // so the UI can show a hover definition instead of just hoping the reader already knows the
+  // word. GLOSSARY_DELIMITER is a marker unlikely to appear in normal prose — everything after
+  // it in the response is treated as the glossary payload, everything before is the rewrite.
+  const GLOSSARY_DELIMITER = "---GLOSSARY---";
+  const glossaryInstruction = tone === "elevated"
+    ? `
+
+After the rewritten text, on its own line, write exactly: ${GLOSSARY_DELIMITER}
+Then, on the following line, output a JSON array (and nothing else) listing every word or short phrase you upgraded to a more precise word, in exactly this form:
+[{"word": "defray", "definition": "help pay for"}]
+Use "word" exactly as it appears in your rewritten text above (matching case). Keep each "definition" to 3-6 plain, everyday words — assume the reader has never seen the word before. If you made no vocabulary substitutions, output an empty array: []`
+    : "";
 
   const prompt = `Rewrite the following text in a ${tone} tone.
 Tone description: ${toneDescriptions[tone] || tone}
@@ -685,16 +710,39 @@ Original text:
 """
 ${text}
 """
+${glossaryInstruction}
 
-Return ONLY the rewritten text, no explanations or quotes.`;
+${tone === "elevated" ? `Return the rewritten text, then the ${GLOSSARY_DELIMITER} block exactly as instructed above. Nothing else.` : "Return ONLY the rewritten text, no explanations or quotes."}`;
 
   const rewritten = await callDeepSeek([
     { role: "system", content: "You are a professional text rewriter. Return only the rewritten text, no explanations." },
     { role: "user", content: prompt },
   ]);
 
+  // Split off the glossary block (elevated tone only) before doing any further cleanup, so the
+  // quote-stripping/trim below only ever touches the actual rewritten prose.
+  let rawRewritten = rewritten;
+  let elevatedWords: ElevatedWordGloss[] | undefined;
+  if (tone === "elevated" && rewritten.includes(GLOSSARY_DELIMITER)) {
+    const [beforeGlossary, afterGlossary] = rewritten.split(GLOSSARY_DELIMITER);
+    rawRewritten = beforeGlossary;
+    try {
+      const parsed = JSON.parse(afterGlossary.trim());
+      if (Array.isArray(parsed)) {
+        elevatedWords = parsed.filter(
+          (entry): entry is ElevatedWordGloss =>
+            entry && typeof entry.word === "string" && typeof entry.definition === "string"
+        );
+      }
+    } catch {
+      // Model didn't return valid JSON for the glossary — not worth failing the whole rewrite
+      // over a formatting hiccup on a "nice to have" feature. The rewrite itself is unaffected
+      // since we already split it off above; the UI just won't show hover definitions this time.
+    }
+  }
+
   // Clean up the rewritten text (remove quotes if wrapped)
-  const cleaned = rewritten.replace(/^["']|["']$/g, "").trim();
+  const cleaned = rawRewritten.replace(/^["']|["']$/g, "").trim();
 
   // Validate facts are preserved
   const factValidation = validateFacts(facts, cleaned);
@@ -709,6 +757,7 @@ Return ONLY the rewritten text, no explanations or quotes.`;
       factsProtected: facts,
       factMismatch: !factValidation.match,
       meaningSimilarity: 0.9, // TODO: implement proper similarity check
+      ...(elevatedWords && elevatedWords.length > 0 ? { elevatedWords } : {}),
     },
     usage: {
       characterCount: text.length,
