@@ -77,6 +77,11 @@ interface GrammarStore {
   // the word, not just the one clicked.
   ignoredWords: Set<string>;
   ignoreIssue: (issueId: string) => void;
+
+  // Clears the current session (text, issues, rewrite result) back to a blank slate —
+  // used by the logo/"start over" action. Deliberately does NOT touch ignoredWords,
+  // voiceProfileId, or tone: those are standing user preferences, not part of "this check."
+  reset: () => void;
 }
 
 /**
@@ -216,6 +221,18 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
     set((state) => ({
       issues: state.issues.filter((i) => i.id !== issueId),
     }));
+  },
+
+  reset: () => {
+    set({
+      text: "",
+      issues: [],
+      hasChecked: false,
+      checkError: null,
+      history: [],
+      rewriteResult: null,
+      rewriteError: null,
+    });
   },
 
   ignoreIssue: (issueId) => {

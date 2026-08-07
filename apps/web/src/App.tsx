@@ -64,26 +64,35 @@ export default function App() {
     };
   }, [getToken]);
   const [tab, setTab] = useState<Tab>("check");
-  const { issues, isChecking, hasChecked, checkError, text, setText, checkGrammar, rewriteText, rewriteResult, isRewriting, rewriteError, tone, setTone } = useGrammarStore();
+  const { issues, isChecking, hasChecked, checkError, text, setText, checkGrammar, rewriteText, rewriteResult, isRewriting, rewriteError, tone, setTone, reset } = useGrammarStore();
 
   return (
     <div className="min-h-screen bg-surface-50">
-      <Header />
+      <Header
+        onLogoClick={() => {
+          setTab("check");
+          reset();
+        }}
+      />
 
       {/* Editor - visible when signed in */}
       {isSignedIn && (
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {/* Tab Switcher */}
-          <div className="flex items-center gap-1 p-1 bg-surface-100 rounded-xl w-fit mb-6">
+          {/* Tab Switcher. overflow-x-auto + flex-shrink-0/whitespace-nowrap on each button
+              instead of the old bare `w-fit` row: at narrow widths (phones, split-screen
+              windows, or Chrome's side panel eating into the viewport) the four labels
+              didn't fit on one line and wrapped mid-word ("Word" / "Doc" on separate
+              lines). Now the row scrolls horizontally instead of breaking the labels. */}
+          <div className="flex items-center gap-1 p-1 bg-surface-100 rounded-xl w-fit max-w-full overflow-x-auto mb-6">
             <button
               onClick={() => setTab("check")}
-              className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              className={`flex-shrink-0 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 tab === "check"
                   ? "bg-surface-0 text-brand-600 shadow-sm"
                   : "text-ink-500 hover:text-ink-700"
               }`}
             >
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-2 whitespace-nowrap">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -92,13 +101,13 @@ export default function App() {
             </button>
             <button
               onClick={() => setTab("rewrite")}
-              className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              className={`flex-shrink-0 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 tab === "rewrite"
                   ? "bg-surface-0 text-brand-600 shadow-sm"
                   : "text-ink-500 hover:text-ink-700"
               }`}
             >
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-2 whitespace-nowrap">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
@@ -107,13 +116,13 @@ export default function App() {
             </button>
             <button
               onClick={() => setTab("document")}
-              className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              className={`flex-shrink-0 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 tab === "document"
                   ? "bg-surface-0 text-brand-600 shadow-sm"
                   : "text-ink-500 hover:text-ink-700"
               }`}
             >
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-2 whitespace-nowrap">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
@@ -122,13 +131,13 @@ export default function App() {
             </button>
             <button
               onClick={() => setTab("voice")}
-              className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              className={`flex-shrink-0 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 tab === "voice"
                   ? "bg-surface-0 text-brand-600 shadow-sm"
                   : "text-ink-500 hover:text-ink-700"
               }`}
             >
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-2 whitespace-nowrap">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
