@@ -372,3 +372,13 @@ Separately, and unrelated to the above: the user also spotted ProsePilot popping
 Verified via `node --check` (syntax only, same as before — no build step for this plain-JS extension). Bumped `manifest.json` to **v1.0.11**. Same distribution caveat as v1.0.10: this only exists in the repo and the user's local "Load unpacked" dev copy until it's packaged and separately submitted to the Chrome Web Store (v1.0.9 is still mid-review there, unrelated to this fix) — reload from `edge://extensions` to pick up locally.
 
 Verified via esbuild syntax parse of both files only (external component imports mocked out). Note: the `prosepilot-extension.zip` static file itself was left in place in `apps/web/public/` (nothing currently links to it after this change) rather than deleted, in case it's still useful as a manual fallback — worth deleting later if unused.
+
+## Grammar rule added: MISSING LINKING VERB (2026-08-10)
+
+While testing the Outlook fixes above, the user typed "My book on the table." and asked why ProsePilot didn't catch the missing "is". Checked the console logs the user pasted — the check pipeline itself was working (issues were being found and rendered for other things in the same session), so this wasn't an extension bug. Checked `grammar.ts`'s prompt directly: the existing MISSING AUXILIARY VERB rule only covers passive-voice constructions missing was/were/is/are before a past participle ("work orders completed"→"were completed") — a sentence with no verb at all (a bare subject + prepositional phrase, no participle present) doesn't match that pattern's shape, so the model had no explicit instruction to catch it.
+
+Added a new rule bullet distinct from the existing one:
+
+- MISSING LINKING VERB: a subject with no verb at all connecting it to a location, description, or state — "My book on the table"→"My book is on the table"; "The report ready"→"The report is ready".
+
+Verified via esbuild (`grammar.ts`, format=esm, syntax parse only — same as always, this isn't a substitute for `pnpm typecheck`). Per standing instruction, pushed directly since this is a core grammar-engine correction (no need to ask each time for this category — other categories still get reported before pushing).

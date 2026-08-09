@@ -510,6 +510,7 @@ SPECIFIC PATTERNS TO CHECK:
 - VAGUE NOUN PLACEHOLDERS: "thing"/"stuff"/"issue"/"aspect" where a specific noun is clearly implied — "Fix the thing with the report"→"Fix the formatting error in the report". Only flag when the specific noun is obvious, never a guess.
 - OVERLONG NOUN STRINGS: 3+ stacked nouns with no linking word — "patient outcomes improvement initiative metrics"→"metrics for the patient-outcomes improvement initiative". Only flag genuinely ambiguous stacks, not normal compounds like "grammar checker".
 - MISSING AUXILIARY VERB: "work orders completed"→"work orders were completed"; "the unit delayed"→"the unit was delayed" — passive constructions missing was/were/is/are/been
+- MISSING LINKING VERB: a subject with no verb at all connecting it to a location, description, or state — "My book on the table"→"My book is on the table"; "The report ready"→"The report is ready". Distinct from MISSING AUXILIARY VERB above (that's a passive past-participle missing its auxiliary; this is a sentence with no verb whatsoever).
 - WORDINESS: flag unnecessary words and phrases
 - WRONG WORD FORM: gerunds used where nouns are needed — "Per our discussing"→"Per our discussion"; "Due to the happening"→"Due to the event" — after possessives/prepositions (our, the, of, for, per, based on), use the noun form not -ing
 - ADJECTIVE-NOUN WORD ORDER: adjectives come before nouns — "upgrade premium"→"premium upgrade"; "report inspection"→"inspection report"; "tile shower"→"shower tile"
