@@ -527,6 +527,11 @@ SPECIFIC PATTERNS TO CHECK:
 - NUMBERS AT SENTENCE START: never start a sentence with a numeral — "6% of respondents agreed"→"Six percent of respondents agreed."
 - INCONSISTENT NUMBER FORMATTING IN A SERIES: all spelled out or all numerals, not mixed — "two apples, 6 oranges, and 3 bananas"→"two apples, six oranges, and three bananas".
 - ITS/IT'S, YOUR/YOU'RE, THEIR/THEY'RE, WHOSE/WHO'S: context decides which is right — "its"=possessive, "it's"="it is/has"; "your"=possessive, "you're"="you are"; "their"=possessive, "they're"="they are"; "whose"=possessive, "who's"="who is/has". "The company lost it's license"→"its license"; "Your the best candidate"→"You're the best candidate".
+- CORRELATIVE CONJUNCTIONS: paired connectors must match — either...or, neither...nor, not only...but also. "Neither the manager or the tenant agreed"→"...nor the tenant agreed"; "Not only was the unit late but over budget"→"...but also over budget".
+- GENDERED JOB TITLES: prefer gender-neutral job nouns in professional writing — "fireman"→"firefighter"; "chairman"→"chairperson"/"chair"; "mailman"→"mail carrier"; "policeman"→"police officer"; "stewardess"→"flight attendant".
+- CONTRAST VS ADDITIVE TRANSITIONS: "on the other hand"/"however"/"in contrast" must introduce a genuinely contrasting idea, not another supporting point — "Rent is up 5%. On the other hand, occupancy also improved" (both are good news, not a contrast) → "In addition, occupancy also improved". Only flag when the two ideas clearly don't oppose each other.
+- ADVERB MISUSED TO MODIFY A NOUN: adverbs modify verbs/adjectives, not nouns — "a dramatically increase"→"a dramatic increase" (adjective+noun) or "increased dramatically" (verb+adverb).
+- ARTICLE WITH COUNTRY/PLACE NAMES: no "the" before most country names — "in the Japan"→"in Japan"; "many people in the Texas"→"in Texas". Exception: abbreviated or plural/collective place names keep "the" — "the U.K.", "the U.S.A.", "the Philippines".
 
 Be AGGRESSIVE about finding issues. Even small improvements count. Return issues for EVERY mistake you find, no matter how minor.
 
