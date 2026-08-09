@@ -2,7 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- SVG favicon first (crisp, preferred by modern browsers), then classic .ico and sized
+         PNG fallbacks. Browser address-bar/omnibox icon slots (esp. Arc, Safari, older Chromium)
+         are inconsistent about picking up SVG-only favicons even though they render fine in the
+         tab itself, so the fallback chain matters for that specific spot, not just the tab. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ProsePilot — Your Writing Co-Pilot</title>
     <meta name="description" content="Fix grammar, improve clarity, and match your tone — all in one place. The writing assistant that works where you do. From $5/month." />
