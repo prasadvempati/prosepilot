@@ -334,3 +334,13 @@ User linked `https://www.youtube.com/watch?v=nKBzVyJD4x4` ("Writing workshop: 10
 - ARTICLE WITH COUNTRY/PLACE NAMES: no "the" before most country names ("in the Japan" → "in Japan"), except abbreviated/plural place names ("the U.K.", "the Philippines").
 
 Verified via esbuild syntax parse only.
+
+## Chrome install links point at the live Chrome Web Store listing; Edge shows "Coming soon" (2026-08-09)
+
+Verified extension store status directly via the Chrome Web Store Developer Dashboard and Microsoft Partner Center (logged in as the user, screenshots reviewed in-session — not assumed). Chrome: ProsePilot is **Published — public**, v1.0.6, item ID `gafofglaaopdifodogfifofndmogghfi`, live since 2026-07-28. Edge: still **In review** in Partner Center, submitted 2026-07-29, not yet public.
+
+Previously, every "Get the extension" / "Install for Chrome" / "Install for Edge" link on the site (`Header.tsx` x2, `LandingPage.tsx` x2) pointed at a static `/prosepilot-extension.zip` in `apps/web/public/` — a frozen sideload snapshot that never auto-updates; every manager who installed it would need to manually re-download and reload it in `chrome://extensions` after any extension-side (content.js/popup.html/manifest.json) change. Backend/grammar-prompt changes were never affected by this — the extension calls the live production API, so those propagate instantly regardless of install method.
+
+Changed all four links to `https://chromewebstore.google.com/detail/prosepilot/gafofglaaopdifodogfifofndmogghfi` (Chrome), which gets Chrome's built-in silent auto-update — no manager action needed on future extension-shell updates, once published through the store rather than sideloaded. The "Install for Edge" button in `LandingPage.tsx` was changed from a zip download link to a disabled "Edge — Coming soon" placeholder (not linked to the unpublished listing or the old zip) until Microsoft's review clears; swap it to the real Edge Add-ons URL at that point. The helper text below the buttons was also updated to reflect that Chrome now auto-updates rather than instructing users to manually load an unpacked zip.
+
+Verified via esbuild syntax parse of both files only (external component imports mocked out). Note: the `prosepilot-extension.zip` static file itself was left in place in `apps/web/public/` (nothing currently links to it after this change) rather than deleted, in case it's still useful as a manual fallback — worth deleting later if unused.

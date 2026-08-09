@@ -240,9 +240,14 @@ export function LandingPage({ isSignedIn, onStartWriting }: LandingPageProps) {
             Install ProsePilot on Chrome or Edge for real-time grammar checking in Outlook, Gmail, Google Docs, and any website.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            {/* Points at the live Chrome Web Store listing (published 2026-07-28) instead of the
+                static /prosepilot-extension.zip sideload file. Store installs get Chrome's
+                built-in silent auto-update — no manual re-download/reload needed by users ever
+                again, unlike the zip which was frozen at whatever version was downloaded. */}
             <a
-              href="/prosepilot-extension.zip"
-              download
+              href="https://chromewebstore.google.com/detail/prosepilot/gafofglaaopdifodogfifofndmogghfi"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-brand-500 to-brand-600 text-white rounded-xl font-semibold text-lg shadow-lg shadow-brand-500/25 hover:shadow-xl hover:shadow-brand-500/30 hover:-translate-y-0.5 transition-all"
             >
               <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
@@ -251,20 +256,23 @@ export function LandingPage({ isSignedIn, onStartWriting }: LandingPageProps) {
               </svg>
               Install for Chrome
             </a>
-            <a
-              href="/prosepilot-extension.zip"
-              download
-              className="inline-flex items-center gap-3 px-8 py-4 bg-white border-2 border-surface-200 text-ink-700 rounded-xl font-semibold text-lg hover:border-brand-300 hover:bg-brand-50 hover:-translate-y-0.5 transition-all"
+            {/* Edge listing is still "In review" in Microsoft Partner Center (submitted
+                2026-07-29) — not live yet, so this is a disabled placeholder rather than a link
+                to the unpublished listing or the old zip. Swap to the real Edge Add-ons URL once
+                Microsoft approves it. */}
+            <span
+              className="inline-flex items-center gap-3 px-8 py-4 bg-surface-50 border-2 border-surface-200 text-ink-400 rounded-xl font-semibold text-lg cursor-not-allowed"
+              title="Edge extension is pending Microsoft review"
             >
               <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
                 <path d="M12 2L2 19.5h20L12 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
                 <circle cx="12" cy="14" r="3" fill="currentColor"/>
               </svg>
-              Install for Edge
-            </a>
+              Edge — Coming soon
+            </span>
           </div>
           <p className="mt-6 text-sm text-ink-400">
-            After downloading, open <code className="px-1.5 py-0.5 bg-surface-100 rounded text-ink-600 font-mono text-xs">chrome://extensions</code> (Chrome) or <code className="px-1.5 py-0.5 bg-surface-100 rounded text-ink-600 font-mono text-xs">edge://extensions</code> (Edge), enable Developer mode, and click "Load unpacked".
+            Chrome installs and updates automatically from the Chrome Web Store. Edge support is on the way.
           </p>
         </div>
       </section>

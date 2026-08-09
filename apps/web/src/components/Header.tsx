@@ -58,10 +58,12 @@ export function Header({ onLogoClick, showMarketingNav = true }: HeaderProps = {
           <div className="flex items-center gap-3">
             {/* Always visible regardless of sign-in state — the Chrome/Edge install buttons
                 only exist in the signed-out marketing section below, so a signed-in user
-                previously had no way to reach the extension download at all. */}
+                previously had no way to reach the extension download at all. Points at the
+                Chrome Web Store listing (auto-updates) rather than the static zip. */}
             <a
-              href="/prosepilot-extension.zip"
-              download
+              href="https://chromewebstore.google.com/detail/prosepilot/gafofglaaopdifodogfifofndmogghfi"
+              target="_blank"
+              rel="noopener noreferrer"
               className="btn-ghost text-sm hidden sm:flex items-center gap-1.5"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -126,8 +128,9 @@ export function Header({ onLogoClick, showMarketingNav = true }: HeaderProps = {
                   empty panel below ~640px, which looked broken. */}
               {isSignedIn && (
                 <a
-                  href="/prosepilot-extension.zip"
-                  download
+                  href="https://chromewebstore.google.com/detail/prosepilot/gafofglaaopdifodogfifofndmogghfi"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="btn-ghost text-sm justify-start flex items-center gap-1.5"
                   onClick={() => setMobileMenuOpen(false)}
                 >
