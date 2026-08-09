@@ -268,6 +268,7 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     { pattern: /\bmails\b/g, replacement: "mail", category: "grammar", rule: "uncountable_noun", explanation: "'Mail' is typically uncountable. Use 'mail' not 'mails'." },
     { pattern: /\bprogresses\b/gi, replacement: "progress", category: "grammar", rule: "uncountable_noun", explanation: "'Progress' is uncountable. Use 'progress' not 'progresses'." },
     { pattern: /\bresearches\b/gi, replacement: "research", category: "grammar", rule: "uncountable_noun", explanation: "'Research' is uncountable. Use 'research' not 'researches'." },
+    { pattern: /\bevidences\b/gi, replacement: "evidence", category: "grammar", rule: "uncountable_noun", explanation: "'Evidence' is uncountable. Use 'evidence' not 'evidences'." },
 
     // === MISSING OBJECT PRONOUN ===
     // "they finished on time" → "they finished it on time"
@@ -480,6 +481,7 @@ CRITICAL RULES:
 SPECIFIC PATTERNS TO CHECK:
 - TYPOS IN COMMON WORDS: Catch simple typos where a common function/word is missing a letter, has an extra letter, or has transposed letters — e.g. "wen" → "when", "somone" → "someone", "teh" → "the", "recieve" → "receive". These are easy to miss because the misspelled form can look like a rare word or name. Always infer the most contextually PROBABLE intended word given the sentence, never the nearest dictionary match in isolation — a plain spellchecker might "correct" "wen" to the name "Wen", but in running text the overwhelmingly likely intent is the common word "when". Treat this category with the same priority as the more specific patterns below.
 - SUBJECT-VERB AGREEMENT: The verb must agree with its subject in person and number — "he go" → "he goes", "someone open" → "someone opens", "I has" → "I have", "they was" → "they were". Third-person singular subjects (he/she/it/someone/anyone/the tenant) take the -s/-es verb form.
+- DO NOT FLAG: singular "they/them/their" for a person of unknown or unspecified gender ("If a participant withdraws, they will be replaced") — this is correct, standard modern English, not a subject-verb agreement error.
 - PROPER NOUNS: Product/brand names MUST be capitalized correctly: "prosepilot" → "ProsePilot", "grammarly" → "Grammarly", "deepseek" → "DeepSeek", "openai" → "OpenAI", "microsoft" → "Microsoft"
 - ARTICLE CAPITALIZATION: "the edge" → "The Edge" (when referring to a product), "the internet" → "The Internet" (when used as a proper noun)
 - SENTENCE START: First word of every sentence must be capitalized
@@ -487,7 +489,13 @@ SPECIFIC PATTERNS TO CHECK:
 - SPELLING: "leasing" used as adjective → "leased" (past participle)
 - PUNCTUATION: semicolons before independent clauses ("LLC; the service")
 - CONCISENESS: "I would like to recommend to have" → "I want to recommend having"; "We would like to request" → "We want to request"
-- PASSIVE VOICE: Flag passive constructions when active voice is clearer
+- PASSIVE VOICE: Flag passive constructions when active voice is clearer. Signal to look for: a form of "to be" (is/are/was/were/been/being) followed by a past participle, often with "by ___" naming who actually did it — "The report was reviewed by the manager" → "The manager reviewed the report". Don't confuse with past tense ("The manager reviewed the report" is active, not passive, even though it's about the past).
+- HIDDEN VERBS (NOMINALIZATIONS): A verb turned into a noun that then needs a second, weaker verb to prop it up — "conduct an analysis of" → "analyze"; "make a decision about" → "decide"; "provide an explanation of" → "explain"; "are responsible for management of" → "manage". Common endings: -tion, -sion, -ment, -ance, often sitting between "the" and "of". Flag under style/conciseness when the direct verb reads more naturally.
+- AMBIGUOUS PRONOUN ANTECEDENT: A pronoun (it/they/this/that) whose referent could plausibly be more than one noun in the sentence — "When the editor contacted the author, they declined" (who declined, the editor or the author?) → replace the pronoun with the specific noun. Category "clarity". Only flag genuine two-way ambiguity, not every pronoun.
+- ARTICLE CHOICE, A vs AN: Choose by SOUND, not spelling — "a European study" (y-sound), "an hour" (silent h), "an MRI" (vowel sound "em"), "a university" (y-sound). Only flag clear sound mismatches like "an European" or "a hour".
+- ARTICLE CHOICE, A/AN vs THE: Use "a/an" the first time something is introduced, "the" for every mention after that once it's a specific, known item — "We propose a new process. The process will..." not "...The new process. A process will...". Category "grammar". Only flag when the mismatch is unambiguous from context.
+- VAGUE NOUN PLACEHOLDERS: Words like "thing", "stuff", "issue", "aspect" used where a specific noun is clearly implied by the surrounding context — "Fix the thing with the report" → "Fix the formatting error in the report". Category "clarity". Only flag when the specific noun is obvious from context, never a guess.
+- OVERLONG NOUN STRINGS: Three or more nouns stacked with no linking word can be hard to parse — "patient outcomes improvement initiative metrics" → "metrics for the patient-outcomes improvement initiative". Category "clarity"/"style". Only flag genuinely ambiguous stacks, not normal two-word compounds like "grammar checker" or "site visit".
 - MISSING AUXILIARY VERB: "work orders completed" → "work orders were completed"; "the unit delayed" → "the unit was delayed"; "the project finished" → "the project was finished" — passive constructions missing "was/were/is/are/been"
 - WORDINESS: Flag unnecessary words and phrases
 - WRONG WORD FORM: Gerunds used where nouns are needed. "Per our discussing" → "Per our discussion"; "Due to the happening" → "Due to the event"; "Based on our meeting discussing" → "Based on our meeting discussion" — after possessives (our, their, the, a, an) and prepositions (of, for, during, after, before, per, based on), use the NOUN form not the gerund (-ing form)

@@ -240,6 +240,24 @@ User uploaded a second vocabulary source, `GRE-800-cafetadris.com_.pdf` (Barron'
 
 **Not yet done:** same as every feature in this log — sandbox has no `tsc`, verified via esbuild syntax parse only (both files clean), run `pnpm typecheck` locally before pushing. No live test yet of the new words actually surfacing in a real Elevated-tone rewrite.
 
+## New check-prompt rules sourced from two external writing guides (2026-08-08)
+
+User linked two pages and asked for their writing rules to be extracted into the app: digital.gov's "Writing for understanding" (the federal plain-language guide) and a proof-reading-service.com article on nouns/pronouns/articles for academic writing. Fetched both, pulled out the rules that are (a) concrete/testable rather than vague style advice and (b) safe to apply to general business writing (not academic-paper-specific), and folded them into `checkGrammar()`'s DeepSeek prompt in `services/api/src/engine/grammar.ts` (`callDeepSeekForIssues()`).
+
+**Added to the DeepSeek prompt's "SPECIFIC PATTERNS TO CHECK" list:**
+- Sharpened the existing PASSIVE VOICE line with digital.gov's actual detection heuristic (a "to be" form + past participle, often with "by ___" naming the real actor) and an explicit note not to confuse passive voice with past tense.
+- HIDDEN VERBS / NOMINALIZATIONS (digital.gov): "conduct an analysis of" → "analyze"; "responsible for management of" → "manage".
+- AMBIGUOUS PRONOUN ANTECEDENT (proof-reading-service.com): flags genuine two-way ambiguity only, e.g. "When the editor contacted the author, they declined" — who declined?
+- ARTICLE CHOICE, A vs AN by sound not spelling ("a European study", "an MRI", "an hour") and A/AN vs THE for first-vs-subsequent mention.
+- VAGUE NOUN PLACEHOLDERS ("thing", "stuff", "issue" → the specific noun the context implies) and OVERLONG NOUN STRINGS (add a preposition/hyphen when 3+ stacked nouns get hard to parse) — both from the proofreading article's noun-precision section.
+- A "DO NOT FLAG" line for singular "they" with unknown/unspecified-gender antecedents ("If a participant withdraws, they will be replaced") — the proofreading article explicitly endorses this as correct modern usage, and it's a classic false-positive risk for grammar checkers that predate that norm; added defensively so ProsePilot doesn't regress into flagging it.
+
+**Added to the deterministic regex rule set** (the safe, always-correct-regardless-of-context tier): `evidences` → `evidence` (uncountable noun), matching the existing `informations`/`advices`/`equipments` pattern — this was the one uncountable-noun example the proofreading article used that wasn't already covered.
+
+**Deliberately NOT added:** digital.gov's present-tense-over-future/conditional guidance. That guidance is written for government policy/instructional documents describing what a document itself does ("this section tells you..." vs "...would satisfy..."), not general business correspondence — flagging ordinary future tense ("I will send the report Friday") as a style problem would be a false positive in the overwhelming majority of ProsePilot's actual use cases (emails, proposals), so it was left out rather than generalized past what the source actually supports. Also left `localGrammarModel.ts` (the small local-model tier) untouched — all of these new rules are inherently contextual/ambiguous (that's exactly why they went into the DeepSeek prompt, which has actual language understanding, rather than a blind regex), and the local model's own documented scope is narrow, unambiguous, always-safe fixes only (see its `HIGH_RISK_SHORT_WORDS` comment).
+
+**Not yet done:** same as always — sandbox has no `tsc`, verified via esbuild syntax parse only, run `pnpm typecheck` locally before pushing. No live test yet of these new patterns actually firing on real DeepSeek output (they're prompt guidance, not deterministic, so DeepSeek's actual adherence is worth spot-checking on a few real sentences).
+
 ## Open items / priority order if picking this up
 
 1. **Fix the local-model contraction-dropping bug** (`dont`→`do`, `Its`→`It`) before any public demo — this is the one that actively damages user text under a button labeled "Safe."
