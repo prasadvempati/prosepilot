@@ -461,6 +461,19 @@ async function callDeepSeekForIssues(text: string): Promise<GrammarIssue[]> {
     const cached = getCachedDeepSeekIssues(sourceHash);
     if (cached) return cached;
 
+    // COST NOTE (2026-08-09): everything in this prompt up to the `${text}` interpolation is
+    // 100% static — no mode/language/documentType/voiceProfile is mixed in above this point.
+    // That's deliberate: DeepSeek's API automatically caches repeated prompt prefixes on disk
+    // (no code/config needed), and cache-hit input tokens price at roughly 1/50th of a cache
+    // miss. Because this prefix is byte-for-byte identical on every single check call across
+    // the whole app, it's a near-ideal case for that automatic discount. If you add a variable
+    // (e.g. `${language}`) anywhere before the SPECIFIC PATTERNS block or the text-to-check
+    // marker, you fragment the prefix and silently kill the cache-hit rate for everyone — put
+    // new per-request variation AFTER the text block instead, or accept the cost tradeoff
+    // consciously. The rule bullets below are intentionally terse (no restated category tags,
+    // no human-facing "why we added this" asides) to keep the static block itself smaller —
+    // but every concrete example stays, since vague wording measurably hurts rule-following
+    // (see PROJECT_CONTEXT.md for prior incidents).
     const prompt = `You are a professional grammar and style checker. Analyze the following text for grammar, spelling, punctuation, clarity, style, and tone issues.
 
 Return a JSON array of issues. Each issue must have:
@@ -479,41 +492,41 @@ CRITICAL RULES:
 4. If you're unsure about exact text, skip the issue
 
 SPECIFIC PATTERNS TO CHECK:
-- TYPOS IN COMMON WORDS: Catch simple typos where a common function/word is missing a letter, has an extra letter, or has transposed letters — e.g. "wen" → "when", "somone" → "someone", "teh" → "the", "recieve" → "receive". These are easy to miss because the misspelled form can look like a rare word or name. Always infer the most contextually PROBABLE intended word given the sentence, never the nearest dictionary match in isolation — a plain spellchecker might "correct" "wen" to the name "Wen", but in running text the overwhelmingly likely intent is the common word "when". Treat this category with the same priority as the more specific patterns below.
-- SUBJECT-VERB AGREEMENT: The verb must agree with its subject in person and number — "he go" → "he goes", "someone open" → "someone opens", "I has" → "I have", "they was" → "they were". Third-person singular subjects (he/she/it/someone/anyone/the tenant) take the -s/-es verb form.
-- DO NOT FLAG: singular "they/them/their" for a person of unknown or unspecified gender ("If a participant withdraws, they will be replaced") — this is correct, standard modern English, not a subject-verb agreement error.
-- PROPER NOUNS: Product/brand names MUST be capitalized correctly: "prosepilot" → "ProsePilot", "grammarly" → "Grammarly", "deepseek" → "DeepSeek", "openai" → "OpenAI", "microsoft" → "Microsoft"
-- ARTICLE CAPITALIZATION: "the edge" → "The Edge" (when referring to a product), "the internet" → "The Internet" (when used as a proper noun)
-- SENTENCE START: First word of every sentence must be capitalized
-- COMPOUND WORDS: "fireplace" (not "fire place"), "widespread" (not "wide-spread"), "inoperable" (not "no longer operable")
+- TYPOS IN COMMON WORDS: simple typos in common words — missing/extra/transposed letters — e.g. "wen"→"when", "somone"→"someone", "teh"→"the", "recieve"→"receive". Infer the most contextually PROBABLE intended word, not the nearest dictionary match in isolation (don't "correct" "wen" to the name "Wen").
+- SUBJECT-VERB AGREEMENT: verb must agree with subject in person/number — "he go"→"he goes", "someone open"→"someone opens", "I has"→"I have", "they was"→"they were". Third-person singular (he/she/it/someone/anyone/the tenant) takes -s/-es.
+- DO NOT FLAG: singular "they/them/their" for unknown/unspecified gender ("If a participant withdraws, they will be replaced") — correct modern English, not an agreement error.
+- PROPER NOUNS: "prosepilot"→"ProsePilot", "grammarly"→"Grammarly", "deepseek"→"DeepSeek", "openai"→"OpenAI", "microsoft"→"Microsoft"
+- ARTICLE CAPITALIZATION: "the edge"→"The Edge" (product name), "the internet"→"The Internet" (proper noun)
+- SENTENCE START: first word of every sentence capitalized
+- COMPOUND WORDS: "fireplace" not "fire place", "widespread" not "wide-spread", "inoperable" not "no longer operable"
 - SPELLING: "leasing" used as adjective → "leased" (past participle)
 - PUNCTUATION: semicolons before independent clauses ("LLC; the service")
-- CONCISENESS: "I would like to recommend to have" → "I want to recommend having"; "We would like to request" → "We want to request"
-- PASSIVE VOICE: Flag passive constructions when active voice is clearer. Signal to look for: a form of "to be" (is/are/was/were/been/being) followed by a past participle, often with "by ___" naming who actually did it — "The report was reviewed by the manager" → "The manager reviewed the report". Don't confuse with past tense ("The manager reviewed the report" is active, not passive, even though it's about the past).
-- HIDDEN VERBS (NOMINALIZATIONS): A verb turned into a noun that then needs a second, weaker verb to prop it up — "conduct an analysis of" → "analyze"; "make a decision about" → "decide"; "provide an explanation of" → "explain"; "are responsible for management of" → "manage". Common endings: -tion, -sion, -ment, -ance, often sitting between "the" and "of". Flag under style/conciseness when the direct verb reads more naturally.
-- AMBIGUOUS PRONOUN ANTECEDENT: A pronoun (it/they/this/that) whose referent could plausibly be more than one noun in the sentence — "When the editor contacted the author, they declined" (who declined, the editor or the author?) → replace the pronoun with the specific noun. Category "clarity". Only flag genuine two-way ambiguity, not every pronoun.
-- ARTICLE CHOICE, A vs AN: Choose by SOUND, not spelling — "a European study" (y-sound), "an hour" (silent h), "an MRI" (vowel sound "em"), "a university" (y-sound). Only flag clear sound mismatches like "an European" or "a hour".
-- ARTICLE CHOICE, A/AN vs THE: Use "a/an" the first time something is introduced, "the" for every mention after that once it's a specific, known item — "We propose a new process. The process will..." not "...The new process. A process will...". Category "grammar". Only flag when the mismatch is unambiguous from context.
-- VAGUE NOUN PLACEHOLDERS: Words like "thing", "stuff", "issue", "aspect" used where a specific noun is clearly implied by the surrounding context — "Fix the thing with the report" → "Fix the formatting error in the report". Category "clarity". Only flag when the specific noun is obvious from context, never a guess.
-- OVERLONG NOUN STRINGS: Three or more nouns stacked with no linking word can be hard to parse — "patient outcomes improvement initiative metrics" → "metrics for the patient-outcomes improvement initiative". Category "clarity"/"style". Only flag genuinely ambiguous stacks, not normal two-word compounds like "grammar checker" or "site visit".
-- MISSING AUXILIARY VERB: "work orders completed" → "work orders were completed"; "the unit delayed" → "the unit was delayed"; "the project finished" → "the project was finished" — passive constructions missing "was/were/is/are/been"
-- WORDINESS: Flag unnecessary words and phrases
-- WRONG WORD FORM: Gerunds used where nouns are needed. "Per our discussing" → "Per our discussion"; "Due to the happening" → "Due to the event"; "Based on our meeting discussing" → "Based on our meeting discussion" — after possessives (our, their, the, a, an) and prepositions (of, for, during, after, before, per, based on), use the NOUN form not the gerund (-ing form)
-- ADJECTIVE-NOUN WORD ORDER: Adjectives come BEFORE nouns in English. "upgrade premium" → "premium upgrade"; "report inspection" → "inspection report"; "tile shower" → "shower tile"; "schedule gate" → "gate schedule"; "trim border" → "border trim" — when two nouns are used together, the describing noun becomes an adjective and goes first
-- REDUNDANT WORDS: "efforts troubleshooting" → "troubleshooting efforts"; "ready units vacant" → "vacant ready units" — check for reversed adjective-noun pairs
-- UNCOUNTABLE NOUNS: "foods" → "food"; "informations" → "information"; "advices" → "advice"; "equipments" → "equipment"; "furnitures" → "furniture"; "researches" → "research"; "progresses" → "progress" — these nouns are never pluralized
-- MISSING OBJECT PRONOUN: "they finished on time" → "they finished it on time"; "we submitted early" → "we submitted it early" — transitive verbs like finish, complete, submit, review, approve need a direct object
-- COMMA BEFORE "AND" IN COMPOUND SENTENCES: When two independent clauses (each with a subject + verb) are joined by "and", a comma goes before "and": "The team worked hard and they finished on time" → "The team worked hard, and they finished on time"
-- ADJECTIVE VS ADVERB AFTER ACTION VERBS: After an action verb, use the adverb ("well"), not the adjective ("good") — "The team performed good" → "The team performed well." But after linking/sense verbs (is, feel, look, seem, smell, taste), the adjective is correct — "I feel good," "This looks good" — do NOT flag those.
-- PREPOSITION COLLOCATIONS: Certain verbs pair with one fixed preposition — "depend of" → "depend on"; "consist in" → "consist of"; "discuss about" → "discuss" (the "about" is redundant — "discuss" already means "talk about"); "explain me" → "explain to me". Category "grammar".
-- RESTRICTIVE VS NONRESTRICTIVE CLAUSES (that vs which): Use "that" with no comma for a clause that's necessary to identify which noun you mean — "the report that I sent yesterday" (implies there are other reports). Use "which" with a comma for a clause that just adds extra, non-essential detail — "the report, which I sent yesterday," (there's only one report; the send date is extra info). Category "punctuation"/"grammar". Only flag clear cases, not every "that"/"which".
-- REFLEXIVE PRONOUN OVERUSE: "myself/himself/herself/themselves" used where a plain "me/him/her/them" is correct — a reflexive is only right when the subject and object of the same verb are the same person. "Contact Sarah or myself" → "Contact Sarah or me" (the sender isn't emailing themselves). Category "grammar".
-- PRONOUN CASE IN COMPOUND STRUCTURES: When a pronoun is paired with a name or another pronoun, pick the case you'd use if the other person weren't there — "Bob and me are attending" → "Bob and I are attending" (you'd say "I am attending," not "me am attending"); "sent it to Jane and I" → "sent it to Jane and me" (you'd say "sent it to me," not "sent it to I"). Category "grammar".
-- VERB TENSE CONSISTENCY: Don't shift tense between clauses describing the same time frame — "The instructor explains the diagram to students who asked questions" (mixes present "explains" with past "asked" for one ongoing scene) → "...students who ask questions." Category "grammar". Only flag clearly unintentional shifts, not a deliberate change in time frame.
-- COMMONLY CONFUSED VERB PAIRS: lie (to recline: lie, lay, has lain) vs. lay (to put something down: lay, laid, has laid) — "I need to lay down" → "I need to lie down"; sit vs. set — "set the table," not "sit the table"; rise vs. raise — "prices rose," not "prices raised" (raise needs an object: "the company raised prices"). Category "grammar".
-- NUMBERS AT SENTENCE START: Never start a sentence with a numeral — spell it out or rewrite the sentence. "6% of respondents agreed" → "Six percent of respondents agreed." Category "style".
-- INCONSISTENT NUMBER FORMATTING IN A SERIES: Numbers listed together should be either all spelled out or all numerals, not mixed — "two apples, 6 oranges, and 3 bananas" → "two apples, six oranges, and three bananas". Category "style".
-- ITS/IT'S, YOUR/YOU'RE, THEIR/THEY'RE, WHOSE/WHO'S: Both words in each pair are valid on their own, so only context tells you which is right — "its" is possessive ("the company lost its license"), "it's" means "it is"/"it has" ("it's a beautiful day"); same pattern for "your" (possessive) vs. "you're" ("you are"), "their" (possessive) vs. "they're" ("they are"), and "whose" (possessive) vs. "who's" ("who is"/"who has"). "The company lost it's license" → "its license"; "Your the best candidate" → "You're the best candidate". Category "grammar". This is a deliberately AI-only check — these words are NOT safe to auto-fix from spelling/edit-distance alone, only from reading what the sentence actually means.
+- CONCISENESS: "I would like to recommend to have"→"I want to recommend having"; "We would like to request"→"We want to request"
+- PASSIVE VOICE: a form of "to be" (is/are/was/were/been/being) + past participle, often with "by ___" naming the actual doer — "The report was reviewed by the manager"→"The manager reviewed the report". Don't confuse with past tense ("The manager reviewed the report" is active).
+- HIDDEN VERBS (NOMINALIZATIONS): a verb turned into a noun needing a second, weaker verb — "conduct an analysis of"→"analyze"; "make a decision about"→"decide"; "responsible for management of"→"manage". Common endings: -tion, -sion, -ment, -ance. Flag when the direct verb reads more naturally.
+- AMBIGUOUS PRONOUN ANTECEDENT: a pronoun (it/they/this/that) that could refer to more than one noun in the sentence — "When the editor contacted the author, they declined" (who declined?) → name the specific noun. Only flag genuine two-way ambiguity.
+- ARTICLE CHOICE, A vs AN: choose by SOUND not spelling — "a European study" (y-sound), "an hour" (silent h), "an MRI" (vowel sound), "a university" (y-sound). Only flag clear mismatches like "an European" or "a hour".
+- ARTICLE CHOICE, A/AN vs THE: "a/an" on first mention, "the" after — "We propose a new process. The process will..." not the reverse. Only flag unambiguous mismatches.
+- VAGUE NOUN PLACEHOLDERS: "thing"/"stuff"/"issue"/"aspect" where a specific noun is clearly implied — "Fix the thing with the report"→"Fix the formatting error in the report". Only flag when the specific noun is obvious, never a guess.
+- OVERLONG NOUN STRINGS: 3+ stacked nouns with no linking word — "patient outcomes improvement initiative metrics"→"metrics for the patient-outcomes improvement initiative". Only flag genuinely ambiguous stacks, not normal compounds like "grammar checker".
+- MISSING AUXILIARY VERB: "work orders completed"→"work orders were completed"; "the unit delayed"→"the unit was delayed" — passive constructions missing was/were/is/are/been
+- WORDINESS: flag unnecessary words and phrases
+- WRONG WORD FORM: gerunds used where nouns are needed — "Per our discussing"→"Per our discussion"; "Due to the happening"→"Due to the event" — after possessives/prepositions (our, the, of, for, per, based on), use the noun form not -ing
+- ADJECTIVE-NOUN WORD ORDER: adjectives come before nouns — "upgrade premium"→"premium upgrade"; "report inspection"→"inspection report"; "tile shower"→"shower tile"
+- REDUNDANT WORDS: "efforts troubleshooting"→"troubleshooting efforts"; "ready units vacant"→"vacant ready units" — reversed adjective-noun pairs
+- UNCOUNTABLE NOUNS: "foods"→"food"; "informations"→"information"; "advices"→"advice"; "equipments"→"equipment"; "furnitures"→"furniture"; "researches"→"research" — never pluralized
+- MISSING OBJECT PRONOUN: "they finished on time"→"they finished it on time" — transitive verbs (finish, complete, submit, review, approve) need a direct object
+- COMMA BEFORE "AND" IN COMPOUND SENTENCES: two independent clauses joined by "and" need a comma before it — "The team worked hard and they finished on time"→"...hard, and they finished..."
+- ADJECTIVE VS ADVERB AFTER ACTION VERBS: adverb after action verbs — "The team performed good"→"performed well." Adjective after linking/sense verbs is correct — "I feel good," "This looks good" — do NOT flag those.
+- PREPOSITION COLLOCATIONS: fixed verb+preposition pairs — "depend of"→"depend on"; "consist in"→"consist of"; "discuss about"→"discuss" (redundant "about"); "explain me"→"explain to me".
+- RESTRICTIVE VS NONRESTRICTIVE (that vs which): "that" with no comma when the clause is necessary to identify the noun — "the report that I sent yesterday" (implies other reports exist). "which" with a comma for extra, non-essential detail — "the report, which I sent yesterday,". Only flag clear cases.
+- REFLEXIVE PRONOUN OVERUSE: "myself/himself/herself/themselves" where plain "me/him/her/them" is correct — reflexive only right when subject and object are the same person. "Contact Sarah or myself"→"Contact Sarah or me".
+- PRONOUN CASE IN COMPOUND STRUCTURES: pick the case you'd use if the other person weren't there — "Bob and me are attending"→"Bob and I are attending" (you'd say "I am attending"); "sent it to Jane and I"→"sent it to Jane and me" (you'd say "sent it to me").
+- VERB TENSE CONSISTENCY: don't shift tense between clauses describing the same time frame — "The instructor explains the diagram to students who asked questions"→"...students who ask questions." Only flag clearly unintentional shifts.
+- COMMONLY CONFUSED VERB PAIRS: lie (recline: lie, lay, has lain) vs lay (put down: lay, laid, has laid) — "I need to lay down"→"I need to lie down"; sit vs set — "set the table" not "sit the table"; rise vs raise — "prices rose" not "prices raised" (raise needs an object).
+- NUMBERS AT SENTENCE START: never start a sentence with a numeral — "6% of respondents agreed"→"Six percent of respondents agreed."
+- INCONSISTENT NUMBER FORMATTING IN A SERIES: all spelled out or all numerals, not mixed — "two apples, 6 oranges, and 3 bananas"→"two apples, six oranges, and three bananas".
+- ITS/IT'S, YOUR/YOU'RE, THEIR/THEY'RE, WHOSE/WHO'S: context decides which is right — "its"=possessive, "it's"="it is/has"; "your"=possessive, "you're"="you are"; "their"=possessive, "they're"="they are"; "whose"=possessive, "who's"="who is/has". "The company lost it's license"→"its license"; "Your the best candidate"→"You're the best candidate".
 
 Be AGGRESSIVE about finding issues. Even small improvements count. Return issues for EVERY mistake you find, no matter how minor.
 
