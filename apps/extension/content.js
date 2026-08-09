@@ -1768,6 +1768,22 @@ if (!window.__prosepilot_bridge_installed) {
 
     console.log(`[ProsePilot] Checking text (${text.length} chars): "${text.substring(0, 80)}..."`);
     const rawIssues = await checkText(text);
+
+    // The live text can change while this check was in flight — the DeepSeek/LanguageTool
+    // round trip (0.5-2+ seconds) routinely takes longer than the debounce window (300ms),
+    // so a newer check for more recent text can start, finish, and already mutate the DOM
+    // (e.g. auto-applying an earlier accepted fix) before this older one resolves.
+    // Rendering issues computed against stale text is worse than a no-op: issue.original
+    // may no longer exist verbatim in the DOM at all (previously showed up as a confusing
+    // "Could not find text node containing" warning with nothing rendered), or could even
+    // match the wrong occurrence of a short/common string that reappeared elsewhere. Bail
+    // out entirely once the text has moved on — a newer check already superseded this one,
+    // so nothing is actually lost by discarding it.
+    if (getElementText(el) !== text) {
+      console.log("[ProsePilot] Discarding stale check result — text changed while checking");
+      return;
+    }
+
     // Drop anything the user has told us to stop flagging (e.g. a proper noun that isn't
     // actually a spelling mistake) — applies to every future check, not just this element.
     const issues = rawIssues.filter((i) => !isIgnored(i.original));
@@ -1782,8 +1798,9 @@ if (!window.__prosepilot_bridge_installed) {
     // Nothing ever edits the live text without that explicit click, which eliminates the
     // whole class of bugs the old auto-apply path kept hitting: caret jumping mid-type,
     // offset drift from stale snapshots, and duplicate overlapping edits from two tiers
-    // flagging the same fix. wrapIssuesInSpans/renderUnderlines already fail gracefully
-    // (skip, don't corrupt) if the live text has moved on since this check started.
+    // flagging the same fix. Anything reaching this point has already passed the
+    // stale-text guard above, and wrapIssuesInSpans/renderUnderlines fail gracefully (skip,
+    // don't corrupt) for any individual issue that still doesn't match by the time it runs.
     renderUnderlines(el, issues);
   }, DEBOUNCE_MS);
 
