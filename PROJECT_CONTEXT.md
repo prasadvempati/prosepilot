@@ -1,6 +1,6 @@
 # ProsePilot — Project Context (handoff doc)
 
-Written to brief a fresh Claude Code session on the state of this project. Read this before touching code. Last updated 2026-08-07.
+Written to brief a fresh Claude Code session on the state of this project. Read this before touching code. Last updated 2026-08-08.
 
 ## What ProsePilot is
 
@@ -221,6 +221,24 @@ Previously `App.tsx` had no client-side router — it rendered strictly `{isSign
 - `apps/web/src/components/Pricing.tsx` — added optional `isSignedIn`/`onStartWriting` props. The Free tier's CTA used to be a plain `<a href="/signup">` (a dead link in this router-less SPA); when a signed-in visitor sees pricing on the home view, that tier now renders a "Go to editor" button calling `onStartWriting` instead. Every other tier (Coming soon / Contact sales) is unchanged regardless of auth state.
 
 **Not yet done:** sandbox has no `tsc` available (confirmed again this session), so verification was esbuild-based syntax/JSX parsing on all four touched files (all passed cleanly) rather than a full type-check — run `pnpm typecheck` locally before pushing, same as every other feature in this log. No live click-through test yet of the new home→Start Writing→editor→logo→home round trip.
+
+## Fixed: extension was checking Outlook's search bar as if it were the email body (2026-08-08)
+
+User reported (with a screenshot) that the purple "N issue(s)" popup was appearing anchored below Outlook's top search bar instead of near the email body — and that a grammar issue ("d" -> "D", capitalize first word) was being flagged there. This traced to `findEditables()` in `apps/extension/content.js`: it scans the page (including shadow DOMs, for Outlook compatibility) with a broad selector list — `[contenteditable]`, `textarea`, `input[type='text']`, `input:not([type])`, `[role='textbox']` — filtered only by `isVisible()` and `isLargeEnough()` (offsetHeight > 40px). Outlook's search bar is large enough and matches one of those selectors, so it was being monitored and checked exactly like a genuine compose box — the popup positioning code (`showIssueListPopup`, using `el.getBoundingClientRect()`) was working correctly; `el` was just the wrong element. Not a positioning bug — a targeting bug.
+
+**Fix:** added `isSearchBox(el)` to `content.js` and wired it into `findEditables()`'s filter (`!isSearchBox(el)` alongside the existing `isVisible`/`isLargeEnough` checks). Checks `type="search"`, ARIA roles (`searchbox`, `search`, `combobox`), `aria-label`/`placeholder`/`name`/`id` containing "search", and a `role="search"` landmark ancestor (walked up to 5 levels — search bars are shallow). Deliberately signal-based rather than an Outlook-specific selector, so it should hold up for Gmail's search bar and other webmail providers too, and survive Outlook's own DOM structure changing.
+
+**Shipped as extension v1.0.9** — `manifest.json` bumped, `apps/web/public/prosepilot-extension.zip` repackaged with the fix (same rebuild command as documented above). Existing already-monitored elements from a page that was open before this update won't retroactively un-monitor the search bar until the page is reloaded — acceptable, this only affects already-installed extension instances until they update and the page next loads.
+
+## New vocabulary batch: 25 more words added, list now samples per-request (2026-08-08)
+
+User uploaded a second vocabulary source, `GRE-800-cafetadris.com_.pdf` (Barron's 800 Essential Words for GRE), asking for more words in the Elevated tone. Scanned all 35 pages, filtered to the same business-safe bar as before (immediately placeable in a report/email/proposal, not archaic/literary/themed), and added 25 new entries to `services/api/src/engine/elevatedVocabulary.ts`: forestall, formidable, untenable, substantiate, supersede, rescind, stipulate, intractable, recalcitrant, extraneous, perfunctory, disparage, inadvertently, pervasive, precarious, ostentatious, circuitous, juxtapose, reticent, substantive, compendium, exigency, tangential, copious, onerous.
+
+**New exclusion rule added to the file's own guidance** (for future additions, mine or otherwise): skip words whose main use is describing a *person's character* unflatteringly (indolent, glib, garrulous, obdurate, etc.) even if they're common GRE-list entries — dropping one of those into a rewritten business email risks landing as an unintended personal insult. Words that describe a claim, decision, or situation critically (egregious, disparage, ostentatious) are still fine, since they don't point at a specific person the same way.
+
+**List now past the 40-entry threshold flagged in the file's own prior comment** (55 total). Implemented the sampling it called for: `sampleVocabularyExamples(count)` in `elevatedVocabulary.ts` (a bounded partial Fisher-Yates pick, not a full shuffle) is now what `rewriteText()` in `grammar.ts` calls — 25 per request — instead of mapping the full array into the prompt every time. Keeps DeepSeek prompt size roughly constant as the vocabulary bank keeps growing; each rewrite now draws from a random slice rather than the complete list, which is fine since these are illustrative few-shot examples, not a fixed feature set the model must exhaustively offer.
+
+**Not yet done:** same as every feature in this log — sandbox has no `tsc`, verified via esbuild syntax parse only (both files clean), run `pnpm typecheck` locally before pushing. No live test yet of the new words actually surfacing in a real Elevated-tone rewrite.
 
 ## Open items / priority order if picking this up
 

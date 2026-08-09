@@ -722,7 +722,7 @@ if (!window.__prosepilot_bridge_installed) {
         root.querySelectorAll(sel).forEach((el) => {
           if (seen.has(el)) return;
           seen.add(el);
-          if (!monitored.has(el) && isVisible(el) && isLargeEnough(el)) {
+          if (!monitored.has(el) && isVisible(el) && isLargeEnough(el) && !isSearchBox(el)) {
             elements.push(el);
           }
         });
@@ -735,6 +735,37 @@ if (!window.__prosepilot_bridge_installed) {
 
     searchRoot(document);
     return elements;
+  }
+
+  // Excludes search boxes (Outlook's mail search bar, Gmail's search bar, etc.) from being
+  // treated as a checkable text field. These are large, real `input`/`role="textbox"` elements
+  // that pass isVisible()/isLargeEnough() just like a genuine compose box does, so without this
+  // check the extension would run grammar checks against whatever the user types into a search
+  // bar and pop the issue list up right below it — confusing, since the user has no reason to
+  // expect ProsePilot to be checking their search query. Uses several independent signals
+  // (type="search", common ARIA roles/labels, a `role="search"` landmark ancestor) rather than
+  // hardcoding Outlook-specific selectors, so this holds up across webmail providers and survives
+  // their DOM structure changing.
+  function isSearchBox(el) {
+    const type = (el.getAttribute("type") || "").toLowerCase();
+    if (type === "search") return true;
+
+    const role = (el.getAttribute("role") || "").toLowerCase();
+    if (role === "searchbox" || role === "search" || role === "combobox") return true;
+
+    const label = `${el.getAttribute("aria-label") || ""} ${el.getAttribute("placeholder") || ""} ${el.getAttribute("name") || ""} ${el.id || ""}`.toLowerCase();
+    if (/\bsearch\b/.test(label)) return true;
+
+    // ARIA authoring practice for search landmarks is <form role="search">/<div role="search">
+    // wrapping the input — walk up a bounded number of ancestors (search bars are shallow) so we
+    // don't accidentally exclude something because a distant, unrelated ancestor happens to have
+    // role="search" somewhere far up the tree.
+    let ancestor = el.parentElement;
+    for (let depth = 0; ancestor && depth < 5; depth++, ancestor = ancestor.parentElement) {
+      if ((ancestor.getAttribute("role") || "").toLowerCase() === "search") return true;
+    }
+
+    return false;
   }
 
   function isVisible(el) {

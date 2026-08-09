@@ -9,14 +9,21 @@
 // whether a given upgrade actually reads naturally in the sentence it's rewriting.
 //
 // TO ADD MORE WORDS: just append an entry below. No other file needs to change — rewriteText()
-// pulls its prompt examples from this array automatically. Keep to the same bar as the existing
-// entries: the word should be immediately placeable in ordinary business writing (a report, an
-// email, a proposal) and should not require a reader to already know it, since the rewrite panel
-// shows a hover definition for anything the model actually uses. Good source: the "Most Common
-// GRE Words," "Money Matters," and "Talkative Words" sections of a GRE vocabulary list tend to
-// fit; skip anything themed/obscure (Halloween vocabulary, political-scandal words, single-letter
-// word lists) — those are memorable trivia, not words a business reader should be expected to
-// take in stride.
+// pulls its prompt examples from this array automatically (sampling a random subset per request
+// once the list is large — see the note at the bottom of this file). Keep to the same bar as the
+// existing entries: the word should be immediately placeable in ordinary business writing (a
+// report, an email, a proposal) and should not require a reader to already know it, since the
+// rewrite panel shows a hover definition for anything the model actually uses. Good sources: the
+// "Most Common GRE Words," "Money Matters," and "Talkative Words" sections of a GRE vocabulary
+// list, or general-purpose lists like Barron's 800; skip anything themed/obscure (Halloween
+// vocabulary, political-scandal words, single-letter word lists, mythology/literature-only terms)
+// — those are memorable trivia, not words a business reader should be expected to take in stride.
+// Also skip words whose main use is describing a *person's character* in an unflattering way
+// (e.g. "indolent," "glib," "garrulous," "obdurate") — even though they're common GRE-list
+// entries, using one in a rewritten business email risks reading as a pointed personal insult
+// that the user didn't intend to sharpen. Fine to keep words that describe a claim, decision, or
+// situation critically (egregious, disparage, ostentatious) since those don't land on a specific
+// person the same way.
 export interface VocabularyUpgrade {
   // The wordy phrase this word can replace — used only as a prompt example, not matched
   // literally against user text.
@@ -60,8 +67,53 @@ export const ELEVATED_VOCABULARY_EXAMPLES: VocabularyUpgrade[] = [
   { phrase: "calm someone down by doing something to please them", word: "propitiate", definition: "calm someone by pleasing them" },
   { phrase: "careless or negligent about a duty or responsibility", word: "remiss", definition: "negligent in a duty" },
   { phrase: "open, honest, and not secretive", word: "aboveboard", definition: "honest and not secretive" },
+
+  // Added 2026-08-08 from a Barron's 800 GRE word list the user uploaded, filtered to the same
+  // business-safe bar described above.
+  { phrase: "prevent something by acting before it happens", word: "forestall", definition: "prevent by acting first" },
+  { phrase: "impressively strong, skilled, or difficult to deal with", word: "formidable", definition: "impressively strong or daunting" },
+  { phrase: "not able to be defended or maintained", word: "untenable", definition: "impossible to defend or maintain" },
+  { phrase: "back up a claim with solid evidence", word: "substantiate", definition: "support with solid evidence" },
+  { phrase: "replace something because it's newer or better", word: "supersede", definition: "take the place of, as newer" },
+  { phrase: "officially withdraw or cancel a decision", word: "rescind", definition: "officially cancel or withdraw" },
+  { phrase: "specify something as a required condition", word: "stipulate", definition: "specify as a required condition" },
+  { phrase: "very difficult to manage, solve, or control", word: "intractable", definition: "hard to manage or control" },
+  { phrase: "stubbornly resistant to guidance or control", word: "recalcitrant", definition: "stubbornly resistant to guidance" },
+  { phrase: "not relevant or necessary to the main point", word: "extraneous", definition: "irrelevant, not essential" },
+  { phrase: "done as a routine duty, without real effort", word: "perfunctory", definition: "done half-heartedly, as routine" },
+  { phrase: "speak of something in a dismissive, belittling way", word: "disparage", definition: "belittle, speak dismissively of" },
+  { phrase: "by accident, without meaning to", word: "inadvertently", definition: "unintentionally, by accident" },
+  { phrase: "present or spreading through every part of something", word: "pervasive", definition: "present throughout, widespread" },
+  { phrase: "not securely held, likely to fail or fall", word: "precarious", definition: "unstable, at risk of failing" },
+  { phrase: "showy in a way meant to impress others", word: "ostentatious", definition: "showy, meant to impress" },
+  { phrase: "taking an indirect, roundabout path", word: "circuitous", definition: "roundabout, indirect" },
+  { phrase: "place two things side by side for comparison", word: "juxtapose", definition: "place side by side for comparison" },
+  { phrase: "reluctant to share thoughts or speak openly", word: "reticent", definition: "reluctant to speak openly" },
+  { phrase: "having real, meaningful content rather than superficial", word: "substantive", definition: "meaningful, of real substance" },
+  { phrase: "a short document that summarizes everything important", word: "compendium", definition: "a concise, comprehensive summary" },
+  { phrase: "an urgent situation that demands immediate action", word: "exigency", definition: "an urgent need or situation" },
+  { phrase: "related to the main topic only indirectly", word: "tangential", definition: "related only indirectly, off-topic" },
+  { phrase: "existing in large amounts", word: "copious", definition: "abundant, in large amounts" },
+  { phrase: "difficult and burdensome to deal with", word: "onerous", definition: "burdensome, hard to bear" },
 ];
 
-// Kept small and business-safe by design (see file header) — pulled into the prompt as few-shot
-// examples in rewriteText(). If this list grows past ~40 entries, consider sampling a random
-// subset per request in grammar.ts instead of sending all of them, to keep prompt size bounded.
+// The list crossed 40 entries with the 2026-08-08 addition above, which is the threshold this
+// file previously flagged as "consider sampling instead of sending all of them." rewriteText()
+// in grammar.ts now calls sampleVocabularyExamples() to pick a bounded random subset per request
+// rather than always sending the full array — keeps the DeepSeek prompt size roughly constant as
+// this list keeps growing, at the cost of any single rewrite only ever drawing from a slice of
+// the full vocabulary (acceptable: these are illustrative few-shot examples, not a fixed feature
+// list the model is required to exhaustively offer).
+export function sampleVocabularyExamples(count: number): VocabularyUpgrade[] {
+  const pool = ELEVATED_VOCABULARY_EXAMPLES;
+  if (pool.length <= count) return pool;
+  // Fisher-Yates-ish partial shuffle — only need `count` random picks, not a full shuffle.
+  const picked: VocabularyUpgrade[] = [];
+  const indices = pool.map((_, i) => i);
+  for (let i = 0; i < count && indices.length > 0; i++) {
+    const j = Math.floor(Math.random() * indices.length);
+    picked.push(pool[indices[j]]);
+    indices.splice(j, 1);
+  }
+  return picked;
+}

@@ -1,6 +1,6 @@
 import type { CheckRequest, CheckResponse, GrammarIssue, RewriteRequest, RewriteResponse, ProtectedFact, VoiceProfile, ElevatedWordGloss } from "@prosepilot/writing-core";
 import { extractProtectedFacts, validateFacts, computeHash, shouldShowIssue } from "@prosepilot/writing-core";
-import { ELEVATED_VOCABULARY_EXAMPLES } from "./elevatedVocabulary.js";
+import { sampleVocabularyExamples } from "./elevatedVocabulary.js";
 import { randomUUID } from "crypto";
 import { checkWithLocalModel } from "./localGrammarModel.js";
 
@@ -678,8 +678,10 @@ export async function rewriteText(request: RewriteRequest): Promise<RewriteRespo
     // the local grammar model's short-word bug this pass: vague heuristics drift, concrete
     // examples don't. The examples themselves live in elevatedVocabulary.ts — a standalone,
     // append-only list — specifically so adding more words later never requires touching this
-    // prompt-building logic.
-    elevated: `Upgrade wordy phrases to a single, precise word wherever a natural one exists. Examples:\n${ELEVATED_VOCABULARY_EXAMPLES.map((e) => `- "${e.phrase}" -> "${e.word}"`).join("\n")}\nEvery substitution must still be instantly clear to a business reader on first read — never reach for an obscure, archaic, or overly literary word just to sound impressive, and never force a substitution that doesn't fit naturally. If no common precise word exists for a phrase, leave it as clear, professional prose rather than straining for one.`,
+    // prompt-building logic. The list is now well past 40 entries, so we send a bounded random
+    // sample (25) per request rather than the whole thing, to keep prompt size roughly constant
+    // as the vocabulary bank keeps growing (see sampleVocabularyExamples() in elevatedVocabulary.ts).
+    elevated: `Upgrade wordy phrases to a single, precise word wherever a natural one exists. Examples:\n${sampleVocabularyExamples(25).map((e) => `- "${e.phrase}" -> "${e.word}"`).join("\n")}\nEvery substitution must still be instantly clear to a business reader on first read — never reach for an obscure, archaic, or overly literary word just to sound impressive, and never force a substitution that doesn't fit naturally. If no common precise word exists for a phrase, leave it as clear, professional prose rather than straining for one.`,
   };
 
   // "Elevated" also asks the model to hand back a small glossary of the words it introduced,
