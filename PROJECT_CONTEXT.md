@@ -277,6 +277,8 @@ All of these went into the DeepSeek prompt (contextual judgment calls, same as l
 
 **Not yet done:** sandbox has no `tsc`, verified via esbuild syntax parse only, run `pnpm typecheck` locally before pushing. No live test yet of these specific new patterns firing on real text.
 
+**Follow-up, same session:** user asked "is this enough or is there more to add" — answered honestly: this is prompt engineering (instructions given to DeepSeek per-request), not literal model training, and there's a real ceiling where a longer rule list risks diluting reliability on the rules that matter most, not just free upside. While checking for genuine remaining gaps (not just guessing), found a confirmed one: `localGrammarModel.ts`'s `AMBIGUOUS_WORD_FIXES`/`HIGH_RISK_SHORT_WORDS` comments explicitly say its/your/their/whose confusion is "left for DeepSeek (full sentence context...) instead of guessed at here" — but the DeepSeek prompt never actually had explicit guidance for that word class. Closed that gap: added an ITS/IT'S, YOUR/YOU'RE, THEIR/THEY'RE, WHOSE/WHO'S rule to the same prompt list, explicitly noted as "AI-only, not safe to regex-auto-fix" to match the reasoning already established in `localGrammarModel.ts`. User declined the other two candidates offered (comma splices, parallel structure in lists) for now — those remain open items below if picked up later.
+
 ## Open items / priority order if picking this up
 
 1. **Fix the local-model contraction-dropping bug** (`dont`→`do`, `Its`→`It`) before any public demo — this is the one that actively damages user text under a button labeled "Safe."
@@ -286,3 +288,4 @@ All of these went into the DeepSeek prompt (contextual judgment calls, same as l
 5. Consider a user-facing indicator when the document-checker's 100k-char cap truncates a large document ("checked 45 of 60 paragraphs"), rather than silently stopping.
 6. Consider raising `MAX_DOCX_CHECK_CHARS` now that the tiered pass-2-only-on-clean-paragraph escalation logic bounds DeepSeek spend — the original conservative 100k figure predates that safeguard.
 7. Locate `shouldShowIssue()`'s actual definition (referenced in `grammar.ts`, not defined there) in case voice-profile filtering ever needs debugging.
+8. Check-prompt rule candidates the user explicitly declined to add on 2026-08-08 (not urgent, but real, confirmed-missing gaps if the check prompt gets revisited): comma splices/run-on sentences ("I went to the store, I bought milk" needs a period or semicolon, not just a comma), and parallel structure in lists ("requires typing, filing, and to answer phones" — mismatched verb forms, common in bullet-pointed requirements/résumé-style writing).
