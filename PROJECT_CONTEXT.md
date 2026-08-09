@@ -258,6 +258,25 @@ User linked two pages and asked for their writing rules to be extracted into the
 
 **Not yet done:** same as always — sandbox has no `tsc`, verified via esbuild syntax parse only, run `pnpm typecheck` locally before pushing. No live test yet of these new patterns actually firing on real DeepSeek output (they're prompt guidance, not deterministic, so DeepSeek's actual adherence is worth spot-checking on a few real sentences).
 
+## Purdue OWL rules added to check prompt (2026-08-08)
+
+User asked for a "webcrawl" to find sources to improve the app's English-language checking. The Firecrawl extension wasn't installed in this session (no `firecrawl_*` tools connected) — noted that limitation, and also flagged that Firecrawl's tools (crawl/map/scrape one specific site) aren't actually built for open-ended "find sources on a topic" discovery anyway; that's a `WebSearch` job. Used `WebSearch` to shortlist real sources (filtering out SEO-listicle/affiliate sites with no actual rule content — firstsiteguide, bubblecow, purewrite, etc.), presented the shortlist, and the user picked **Purdue OWL** (owl.purdue.edu) as the next source to mine — the standard free/authoritative English grammar reference.
+
+Fetched 8 Purdue OWL grammar subpages (adjective-vs-adverb common errors, prepositions, that-vs-which, reflexive pronouns, pronoun case, commonly confused verbs, verb tense consistency, writing numbers) and added 9 new rules to the same "SPECIFIC PATTERNS TO CHECK" list in `callDeepSeekForIssues()`'s prompt in `services/api/src/engine/grammar.ts`:
+
+- Adjective vs. adverb after action verbs ("performed good" → "performed well"), with an explicit carve-out for linking/sense verbs ("feel good" stays correct).
+- Preposition collocations ("depend of" → "depend on", "discuss about" → "discuss").
+- Restrictive vs. nonrestrictive clauses, i.e. that vs. which (with/without commas).
+- Reflexive pronoun overuse ("contact Sarah or myself" → "...or me") — a very common professional-email hypercorrection.
+- Pronoun case in compound structures ("Bob and me are attending" → "Bob and I", "sent to Jane and I" → "...Jane and me") — likewise a frequent hypercorrection in business writing.
+- Verb tense consistency within one time frame (kept deliberately simple — the source page's full treatment of perfect/progressive tense sequencing is much deeper than is safe to compress into prompt guidance, so only the core "don't shift tense for the same time frame" rule was carried over).
+- Commonly confused verb pairs: lie/lay, sit/set, rise/raise.
+- Numbers: never start a sentence with a numeral; keep number formatting consistent within a series (all spelled out or all numerals, not mixed).
+
+All of these went into the DeepSeek prompt (contextual judgment calls, same as last round), none into the deterministic regex tier or `localGrammarModel.ts` — same reasoning as before: these all require reading the sentence to apply correctly, which is exactly what the regex/local-model tiers are deliberately scoped to avoid.
+
+**Not yet done:** sandbox has no `tsc`, verified via esbuild syntax parse only, run `pnpm typecheck` locally before pushing. No live test yet of these specific new patterns firing on real text.
+
 ## Open items / priority order if picking this up
 
 1. **Fix the local-model contraction-dropping bug** (`dont`→`do`, `Its`→`It`) before any public demo — this is the one that actively damages user text under a button labeled "Safe."
