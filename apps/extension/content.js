@@ -1145,6 +1145,99 @@ if (!window.__prosepilot_bridge_installed) {
     if (indicator) indicator.remove();
   }
 
+  // Builds the clickable underline <span> for one flagged issue. Pulled out of
+  // wrapIssuesInSpans so both the single-node fast path and the cross-node fallback below
+  // (see mergeNodesForMatch) can share the exact same styling/click-handler logic instead
+  // of duplicating it.
+  function createUnderlineSpan(issue, problemText, issues, el) {
+    const color = issue.category === "spelling" ? "#dc2626" : issue.category === "grammar" ? "#ea580c" : "#6366f1";
+    const span = document.createElement("span");
+    span.className = "prosepilot-underline";
+    span.dataset.issueId = issue.id;
+    span.textContent = problemText;
+    span.style.textDecorationLine = "underline";
+    span.style.textDecorationStyle = "wavy";
+    span.style.textDecorationColor = color;
+    span.style.textUnderlineOffset = "3px";
+    span.style.cursor = "pointer";
+    span.style.background = "rgba(99,102,241,0.06)";
+    span.style.borderRadius = "2px";
+    span.style.padding = "0 1px";
+    span.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const iss = issues.find((i) => i.id === span.dataset.issueId);
+      if (iss) showSuggestionPopup(span, iss, el);
+    });
+    return span;
+  }
+
+  // Splits `node` at `localIdx` and replaces it with before-text + underline span +
+  // after-text, exactly as the old inline logic did. Shared by both the fast path (match
+  // found within a single existing text node) and the cross-node fallback (match found only
+  // after merging a run of adjacent text nodes into one).
+  function wrapNodeAtIndex(node, localIdx, issue, issues, el) {
+    const parent = node.parentNode;
+    if (!parent) return false;
+    const tc = node.textContent;
+    const before = tc.substring(0, localIdx);
+    const problem = tc.substring(localIdx, localIdx + issue.original.length);
+    const after = tc.substring(localIdx + issue.original.length);
+    const span = createUnderlineSpan(issue, problem, issues, el);
+    if (before) parent.insertBefore(document.createTextNode(before), node);
+    parent.insertBefore(span, node);
+    if (after) parent.insertBefore(document.createTextNode(after), node);
+    parent.removeChild(node);
+    console.log("[ProsePilot] Underline CREATED:", issue.original, "->", issue.replacement);
+    return true;
+  }
+
+  // Fallback for when an issue's matched text doesn't exist inside any single text node.
+  // Seen in Outlook's Loop-based compose editor (the newer "cloud.microsoft" UI), which
+  // fragments a contenteditable's text into many small text nodes — a single word like
+  // "grammer" can end up split across two or more adjacent nodes, so the fast path's
+  // per-node indexOf search never finds it even though the word is right there on screen.
+  // This locates the run of consecutive text nodes that together contain the full match,
+  // merges just that run into one plain text node (visually a no-op — adjacent text nodes
+  // under the same parent render identically whether merged or not), and returns the merged
+  // node so the caller can wrap it with the same single-node logic as the fast path.
+  function mergeNodesForMatch(el, matchText, activeRange) {
+    const nodes = collectTextNodes(el);
+    const joined = nodes.map((n) => n.textContent).join("");
+    const globalIdx = joined.indexOf(matchText);
+    if (globalIdx === -1) return null;
+    const matchEnd = globalIdx + matchText.length;
+
+    let pos = 0, startNodeIdx = -1, endNodeIdx = -1;
+    for (let i = 0; i < nodes.length; i++) {
+      const len = nodes[i].textContent.length;
+      if (startNodeIdx === -1 && globalIdx < pos + len) startNodeIdx = i;
+      if (endNodeIdx === -1 && matchEnd <= pos + len) endNodeIdx = i;
+      pos += len;
+      if (startNodeIdx !== -1 && endNodeIdx !== -1) break;
+    }
+    // A same-node match would already have been caught by the fast path — only handle
+    // genuine cross-node spans here.
+    if (startNodeIdx === -1 || endNodeIdx === -1 || endNodeIdx === startNodeIdx) return null;
+
+    const parent = nodes[startNodeIdx].parentNode;
+    if (!parent) return null;
+    for (let i = startNodeIdx; i <= endNodeIdx; i++) {
+      // Don't merge across nodes with different parents (e.g. spanning a line break) —
+      // not safe to assume they're visually adjacent.
+      if (nodes[i].parentNode !== parent) return null;
+      // Same caret-safety rule as the fast path: never touch the node the live caret is
+      // anchored to. Skip this issue this round rather than risk the cursor jumping.
+      if (activeRange && activeRange.startContainer === nodes[i]) return null;
+    }
+
+    let merged = "";
+    for (let i = startNodeIdx; i <= endNodeIdx; i++) merged += nodes[i].textContent;
+    const mergedNode = document.createTextNode(merged);
+    parent.insertBefore(mergedNode, nodes[startNodeIdx]);
+    for (let i = startNodeIdx; i <= endNodeIdx; i++) parent.removeChild(nodes[i]);
+    return mergedNode;
+  }
+
   function wrapIssuesInSpans(el, issues) {
     const text = getElementText(el);
     if (!text) { console.warn("[ProsePilot] wrapIssuesInSpans: no text"); return; }
@@ -1182,7 +1275,8 @@ if (!window.__prosepilot_bridge_installed) {
       }
     }
 
-    const textNodes = collectTextNodes(el);
+    // let, not const — the cross-node fallback below reassigns this after merging nodes
+    let textNodes = collectTextNodes(el);
     console.log("[ProsePilot] wrapIssuesInSpans:", textNodes.length, "text nodes,", sorted.length, "issues");
 
     // If the caret is live inside a text node, never split/replace THAT specific node —
@@ -1194,56 +1288,43 @@ if (!window.__prosepilot_bridge_installed) {
     const activeSel = hadFocus ? window.getSelection() : null;
     const activeRange = activeSel && activeSel.rangeCount > 0 ? activeSel.getRangeAt(0) : null;
 
-    // For each issue, search each text node individually — no offset mapping
+    // For each issue, first try the fast path — search each text node individually. Most
+    // editors (Gmail, LinkedIn, Slack, plain textareas) keep a run of typed text in one text
+    // node, so this handles the common case cheaply with no DOM merging needed.
     for (const issue of sorted) {
       let wrapped = false;
       for (const node of textNodes) {
         if (wrapped) break;
         if (activeRange && activeRange.startContainer === node) continue;
-        const tc = node.textContent;
-        const localIdx = tc.indexOf(issue.original);
+        const localIdx = node.textContent.indexOf(issue.original);
         if (localIdx === -1) continue;
-
-        // Found the issue text in this text node — split and wrap
         try {
-          const parent = node.parentNode;
-          if (!parent) continue;
-
-          const before = tc.substring(0, localIdx);
-          const problem = tc.substring(localIdx, localIdx + issue.original.length);
-          const after = tc.substring(localIdx + issue.original.length);
-
-          const color = issue.category === "spelling" ? "#dc2626" : issue.category === "grammar" ? "#ea580c" : "#6366f1";
-          const span = document.createElement("span");
-          span.className = "prosepilot-underline";
-          span.dataset.issueId = issue.id;
-          span.textContent = problem;
-          span.style.textDecorationLine = "underline";
-          span.style.textDecorationStyle = "wavy";
-          span.style.textDecorationColor = color;
-          span.style.textUnderlineOffset = "3px";
-          span.style.cursor = "pointer";
-          span.style.background = "rgba(99,102,241,0.06)";
-          span.style.borderRadius = "2px";
-          span.style.padding = "0 1px";
-
-          if (before) parent.insertBefore(document.createTextNode(before), node);
-          parent.insertBefore(span, node);
-          if (after) parent.insertBefore(document.createTextNode(after), node);
-          parent.removeChild(node);
-
-          span.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const iss = issues.find((i) => i.id === span.dataset.issueId);
-            if (iss) showSuggestionPopup(span, iss, el);
-          });
-
-          console.log("[ProsePilot] Underline CREATED:", issue.original, "->", issue.replacement);
-          wrapped = true;
+          wrapped = wrapNodeAtIndex(node, localIdx, issue, issues, el);
         } catch (e) {
           console.warn("[ProsePilot] wrap error:", issue.original, e);
         }
       }
+
+      // Fallback — the match doesn't live inside any single text node. See
+      // mergeNodesForMatch's comment for why this happens (Outlook's Loop-based editor
+      // fragmenting text mid-word being the known case).
+      if (!wrapped) {
+        try {
+          const mergedNode = mergeNodesForMatch(el, issue.original, activeRange);
+          if (mergedNode) {
+            const localIdx = mergedNode.textContent.indexOf(issue.original);
+            if (localIdx !== -1) {
+              wrapped = wrapNodeAtIndex(mergedNode, localIdx, issue, issues, el);
+            }
+          }
+        } catch (e) {
+          console.warn("[ProsePilot] cross-node wrap error:", issue.original, e);
+        }
+        // The merge (if it happened) changed the DOM, so refresh textNodes before the next
+        // issue in this loop searches it.
+        if (wrapped) textNodes = collectTextNodes(el);
+      }
+
       if (!wrapped) {
         console.warn("[ProsePilot] Could not find text node containing:", JSON.stringify(issue.original));
       }
