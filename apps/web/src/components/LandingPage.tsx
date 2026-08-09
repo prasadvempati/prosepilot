@@ -46,8 +46,8 @@ export function LandingPage({ isSignedIn, onStartWriting }: LandingPageProps) {
               </h1>
 
               <p className="text-xl text-ink-500 max-w-xl mb-10 leading-relaxed animate-slide-up" style={{ animationDelay: "200ms" }}>
-                Fix grammar, improve clarity, and match your tone — all in one place.
-                The writing assistant that works where you do.
+                Catch errors before you hit send — right inside Outlook, Gmail, and Google Docs.
+                Nothing you write is ever stored or used to train AI.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center gap-4 animate-slide-up" style={{ animationDelay: "300ms" }}>
@@ -98,6 +98,50 @@ export function LandingPage({ isSignedIn, onStartWriting }: LandingPageProps) {
             {/* Right: Demo */}
             <div className="animate-slide-up" style={{ animationDelay: "400ms" }}>
               <HeroDemo />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Privacy — moved up from below Browser Extensions. This is one of ProsePilot's real
+          structural advantages (real-time correction that's never stored or trained on), which
+          matters far more to business/professional writers handling client or resident data
+          than a generic "trust us" footer note would suggest — so it runs right after the hero,
+          before the reader even reaches features. */}
+      <section className="py-20 bg-surface-50">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="card-glass p-10 md:p-14 relative overflow-hidden">
+            {/* Background decoration */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-100 rounded-full blur-3xl opacity-40 -translate-y-1/2 translate-x-1/2" />
+
+            <div className="relative flex flex-col md:flex-row items-start gap-10">
+              <div className="flex-shrink-0">
+                <div className="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center shadow-sm">
+                  <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-ink-900 mb-3">Your writing stays yours</h2>
+                <p className="text-ink-500 leading-relaxed mb-5 max-xl">
+                  ProsePilot never uses your text to train AI models. Your writing is sent to our grammar engine for real-time checking and never stored. If you enable Voice Profile, we store statistical patterns about your style — not your text — to personalize future checks.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    No data training
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    You own your voice profile
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -222,46 +266,6 @@ export function LandingPage({ isSignedIn, onStartWriting }: LandingPageProps) {
           <p className="mt-6 text-sm text-ink-400">
             After downloading, open <code className="px-1.5 py-0.5 bg-surface-100 rounded text-ink-600 font-mono text-xs">chrome://extensions</code> (Chrome) or <code className="px-1.5 py-0.5 bg-surface-100 rounded text-ink-600 font-mono text-xs">edge://extensions</code> (Edge), enable Developer mode, and click "Load unpacked".
           </p>
-        </div>
-      </section>
-
-      {/* Privacy */}
-      <section className="py-20 bg-surface-50">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="card-glass p-10 md:p-14 relative overflow-hidden">
-            {/* Background decoration */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-100 rounded-full blur-3xl opacity-40 -translate-y-1/2 translate-x-1/2" />
-
-            <div className="relative flex flex-col md:flex-row items-start gap-10">
-              <div className="flex-shrink-0">
-                <div className="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center shadow-sm">
-                  <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </div>
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-ink-900 mb-3">Your writing stays yours</h2>
-                <p className="text-ink-500 leading-relaxed mb-5 max-xl">
-                  ProsePilot never uses your text to train AI models. Your writing is sent to our grammar engine for real-time checking and never stored. If you enable Voice Profile, we store statistical patterns about your style — not your text — to personalize future checks.
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    No data training
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    You own your voice profile
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 

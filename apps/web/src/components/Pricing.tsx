@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 const tiers = [
   {
     name: "Free",
@@ -156,6 +158,13 @@ function CellValue({ value }: { value: string | boolean }) {
 }
 
 export function Pricing({ isSignedIn, onStartWriting }: PricingProps = {}) {
+  // Full comparison grid is collapsed by default — leading with a dense usage-limit spec sheet
+  // (chars/check, monthly limit, checks/day across 5 tiers, all above the fold) reads like an
+  // internal metering doc, not a buying decision. The 5 tier cards plus their taglines already
+  // say what each plan is *for*; the exhaustive row-by-row grid is there for whoever wants it,
+  // one click away, not forced on every visitor by default.
+  const [showComparison, setShowComparison] = useState(false);
+
   return (
     <section id="pricing" className="py-24 bg-surface-50 relative overflow-hidden">
       <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-brand-100 rounded-full blur-3xl opacity-40 -translate-y-1/2 translate-x-1/2" />
@@ -237,50 +246,47 @@ export function Pricing({ isSignedIn, onStartWriting }: PricingProps = {}) {
 
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-10">
-            <h3 className="text-2xl font-bold text-ink-900 mb-2">Compare every detail</h3>
-            <p className="text-ink-500">The full picture &mdash; no fine print, no surprises</p>
+            <button
+              onClick={() => setShowComparison((v) => !v)}
+              className="inline-flex items-center gap-2 text-brand-600 font-semibold hover:text-brand-700 transition-colors"
+              aria-expanded={showComparison}
+            >
+              {showComparison ? "Hide full comparison" : "Compare every detail"}
+              <svg
+                className={`w-4 h-4 transition-transform ${showComparison ? "rotate-180" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showComparison && (
+              <p className="text-ink-500 mt-2">The full picture &mdash; no fine print, no surprises</p>
+            )}
           </div>
 
-          <div className="card-glass overflow-hidden border border-surface-200 rounded-2xl">
-            <div className="grid grid-cols-6 gap-0 border-b border-surface-200 bg-surface-100/50 sticky top-0 z-10">
-              <div className="p-4 text-sm font-semibold text-ink-700">Feature</div>
-              {tiers.map((tier) => (
-                <div
-                  key={tier.name}
-                  className={`p-4 text-center text-sm font-semibold text-ink-700 ${
-                    tier.highlight ? "bg-brand-50/50" : ""
-                  }`}
-                >
-                  {tier.name}
-                </div>
-              ))}
-            </div>
-
-            <div className="border-b border-surface-200">
-              <div className="px-4 py-2.5 bg-surface-100/30">
-                <span className="text-xs font-bold uppercase tracking-wider text-ink-400">Usage limits</span>
+          {showComparison && (
+            <div className="card-glass overflow-hidden border border-surface-200 rounded-2xl">
+              <div className="grid grid-cols-6 gap-0 border-b border-surface-200 bg-surface-100/50 sticky top-0 z-10">
+                <div className="p-4 text-sm font-semibold text-ink-700">Feature</div>
+                {tiers.map((tier) => (
+                  <div
+                    key={tier.name}
+                    className={`p-4 text-center text-sm font-semibold text-ink-700 ${
+                      tier.highlight ? "bg-brand-50/50" : ""
+                    }`}
+                  >
+                    {tier.name}
+                  </div>
+                ))}
               </div>
-              {comparisonRows.map((row, i) => (
-                <div key={i} className="grid grid-cols-6 gap-0 border-b border-surface-100 last:border-b-0">
-                  <div className="p-4 text-sm text-ink-700">{row.label}</div>
-                  {row.values.map((val, j) => (
-                    <div
-                      key={j}
-                      className={`p-4 text-center ${tiers[j].highlight ? "bg-brand-50/30" : ""}`}
-                    >
-                      <CellValue value={val} />
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
 
-            {comparisonSections.map((section) => (
-              <div key={section.heading} className="border-b border-surface-200 last:border-b-0">
+              <div className="border-b border-surface-200">
                 <div className="px-4 py-2.5 bg-surface-100/30">
-                  <span className="text-xs font-bold uppercase tracking-wider text-ink-400">{section.heading}</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-ink-400">Usage limits</span>
                 </div>
-                {section.rows.map((row, i) => (
+                {comparisonRows.map((row, i) => (
                   <div key={i} className="grid grid-cols-6 gap-0 border-b border-surface-100 last:border-b-0">
                     <div className="p-4 text-sm text-ink-700">{row.label}</div>
                     {row.values.map((val, j) => (
@@ -294,8 +300,29 @@ export function Pricing({ isSignedIn, onStartWriting }: PricingProps = {}) {
                   </div>
                 ))}
               </div>
-            ))}
-          </div>
+
+              {comparisonSections.map((section) => (
+                <div key={section.heading} className="border-b border-surface-200 last:border-b-0">
+                  <div className="px-4 py-2.5 bg-surface-100/30">
+                    <span className="text-xs font-bold uppercase tracking-wider text-ink-400">{section.heading}</span>
+                  </div>
+                  {section.rows.map((row, i) => (
+                    <div key={i} className="grid grid-cols-6 gap-0 border-b border-surface-100 last:border-b-0">
+                      <div className="p-4 text-sm text-ink-700">{row.label}</div>
+                      {row.values.map((val, j) => (
+                        <div
+                          key={j}
+                          className={`p-4 text-center ${tiers[j].highlight ? "bg-brand-50/30" : ""}`}
+                        >
+                          <CellValue value={val} />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mt-16 text-center">
