@@ -703,10 +703,9 @@ if (!window.__prosepilot_bridge_installed) {
   // ==================== FIND EDITABLE ELEMENTS ====================
 
   function findEditables() {
+    // Just "[contenteditable]" (bare attribute-presence) covers every value including
+    // 'true'/''/'plaintext-only' — no need to list those separately.
     const selectors = [
-      "[contenteditable='true']",
-      "[contenteditable='']",
-      "[contenteditable='plaintext-only']",
       "[contenteditable]",
       "textarea",
       "input[type='text']",
@@ -722,6 +721,17 @@ if (!window.__prosepilot_bridge_installed) {
         root.querySelectorAll(sel).forEach((el) => {
           if (seen.has(el)) return;
           seen.add(el);
+          // The "[contenteditable]" selector above matches ANY value of the attribute,
+          // including contenteditable="false" (explicitly NOT editable — used to mark a
+          // read-only UI "island" inside an editable ancestor) and contenteditable="inherit"
+          // (needs to actually resolve up the ancestor chain to know if it's really
+          // editable). Outlook's newer Loop-based UI ("cloud.microsoft") marks chrome like
+          // settings-menu items this way, and without this check ProsePilot was picking up
+          // and grammar-checking that UI text as if the user had typed it (e.g. the
+          // "Manage add-ins" menu label). The native `isContentEditable` boolean property
+          // resolves the inheritance chain correctly and reports false for "false" — the
+          // raw attribute-presence selector can't do either.
+          if (el.hasAttribute("contenteditable") && !el.isContentEditable) return;
           if (!monitored.has(el) && isVisible(el) && isLargeEnough(el) && !isSearchBox(el)) {
             elements.push(el);
           }
@@ -1147,7 +1157,7 @@ if (!window.__prosepilot_bridge_installed) {
 
   // Builds the clickable underline <span> for one flagged issue. Pulled out of
   // wrapIssuesInSpans so both the single-node fast path and the cross-node fallback below
-  // (see mergeNodesForMatch) can share the exact same styling/click-handler logic instead
+  // (see wrapCrossNodeMatch) can share the exact same styling/click-handler logic instead
   // of duplicating it.
   function createUnderlineSpan(issue, problemText, issues, el) {
     const color = issue.category === "spelling" ? "#dc2626" : issue.category === "grammar" ? "#ea580c" : "#6366f1";
@@ -1192,50 +1202,62 @@ if (!window.__prosepilot_bridge_installed) {
   }
 
   // Fallback for when an issue's matched text doesn't exist inside any single text node.
-  // Seen in Outlook's Loop-based compose editor (the newer "cloud.microsoft" UI), which
-  // fragments a contenteditable's text into many small text nodes — a single word like
-  // "grammer" can end up split across two or more adjacent nodes, so the fast path's
-  // per-node indexOf search never finds it even though the word is right there on screen.
-  // This locates the run of consecutive text nodes that together contain the full match,
-  // merges just that run into one plain text node (visually a no-op — adjacent text nodes
-  // under the same parent render identically whether merged or not), and returns the merged
-  // node so the caller can wrap it with the same single-node logic as the fast path.
-  function mergeNodesForMatch(el, matchText, activeRange) {
+  // Seen in Outlook's Loop-based compose editor (the newer "cloud.microsoft" UI): a single
+  // word like "grammer" can be split across two or more text nodes that don't even share the
+  // same immediate parent element — e.g. the editor wraps each fragment in its own <span> —
+  // so a same-parent node-merging approach isn't reliable (it correctly refuses to merge
+  // across different parents to avoid corrupting formatting, but then just gives up).
+  // Instead, this locates the exact (node, offset) start/end boundary points of the match
+  // across the joined text of every text node in the element, builds a native DOM Range
+  // spanning those boundaries — Range.deleteContents()/insertNode() correctly handle
+  // crossing arbitrary element boundaries, which manual node splicing can't — and replaces
+  // exactly that range with the same underline <span> the fast path would create.
+  function wrapCrossNodeMatch(el, issue, issues, activeRange) {
     const nodes = collectTextNodes(el);
     const joined = nodes.map((n) => n.textContent).join("");
-    const globalIdx = joined.indexOf(matchText);
-    if (globalIdx === -1) return null;
-    const matchEnd = globalIdx + matchText.length;
+    const globalIdx = joined.indexOf(issue.original);
+    if (globalIdx === -1) return false;
+    const matchEnd = globalIdx + issue.original.length;
 
-    let pos = 0, startNodeIdx = -1, endNodeIdx = -1;
+    let pos = 0, startIdx = -1, startOffset = 0, endIdx = -1, endOffset = 0;
     for (let i = 0; i < nodes.length; i++) {
       const len = nodes[i].textContent.length;
-      if (startNodeIdx === -1 && globalIdx < pos + len) startNodeIdx = i;
-      if (endNodeIdx === -1 && matchEnd <= pos + len) endNodeIdx = i;
+      if (startIdx === -1 && globalIdx < pos + len) { startIdx = i; startOffset = globalIdx - pos; }
+      if (endIdx === -1 && matchEnd <= pos + len) { endIdx = i; endOffset = matchEnd - pos; }
       pos += len;
-      if (startNodeIdx !== -1 && endNodeIdx !== -1) break;
+      if (startIdx !== -1 && endIdx !== -1) break;
     }
     // A same-node match would already have been caught by the fast path — only handle
     // genuine cross-node spans here.
-    if (startNodeIdx === -1 || endNodeIdx === -1 || endNodeIdx === startNodeIdx) return null;
+    if (startIdx === -1 || endIdx === -1 || endIdx === startIdx) return false;
 
-    const parent = nodes[startNodeIdx].parentNode;
-    if (!parent) return null;
-    for (let i = startNodeIdx; i <= endNodeIdx; i++) {
-      // Don't merge across nodes with different parents (e.g. spanning a line break) —
-      // not safe to assume they're visually adjacent.
-      if (nodes[i].parentNode !== parent) return null;
-      // Same caret-safety rule as the fast path: never touch the node the live caret is
-      // anchored to. Skip this issue this round rather than risk the cursor jumping.
-      if (activeRange && activeRange.startContainer === nodes[i]) return null;
+    // Same caret-safety rule as the fast path: never touch a range that includes the node
+    // the live caret is anchored to. Skip this issue this round rather than risk the cursor
+    // jumping — it'll just get picked up on the next check once the user's moved past it.
+    if (activeRange) {
+      for (let i = startIdx; i <= endIdx; i++) {
+        if (activeRange.startContainer === nodes[i]) return false;
+      }
     }
 
-    let merged = "";
-    for (let i = startNodeIdx; i <= endNodeIdx; i++) merged += nodes[i].textContent;
-    const mergedNode = document.createTextNode(merged);
-    parent.insertBefore(mergedNode, nodes[startNodeIdx]);
-    for (let i = startNodeIdx; i <= endNodeIdx; i++) parent.removeChild(nodes[i]);
-    return mergedNode;
+    try {
+      const range = document.createRange();
+      range.setStart(nodes[startIdx], startOffset);
+      range.setEnd(nodes[endIdx], endOffset);
+      // Use the range's own text rather than issue.original for the span's content —
+      // they should be identical if the offset math above is right, but this guarantees
+      // the rendered span never shows something other than what was actually removed.
+      const problemText = range.toString();
+      if (!problemText) return false;
+      const span = createUnderlineSpan(issue, problemText, issues, el);
+      range.deleteContents();
+      range.insertNode(span);
+      console.log("[ProsePilot] Underline CREATED (cross-node):", issue.original, "->", issue.replacement);
+      return true;
+    } catch (e) {
+      console.warn("[ProsePilot] cross-node wrap error:", issue.original, e);
+      return false;
+    }
   }
 
   function wrapIssuesInSpans(el, issues) {
@@ -1306,22 +1328,13 @@ if (!window.__prosepilot_bridge_installed) {
       }
 
       // Fallback — the match doesn't live inside any single text node. See
-      // mergeNodesForMatch's comment for why this happens (Outlook's Loop-based editor
-      // fragmenting text mid-word being the known case).
+      // wrapCrossNodeMatch's comment for why this happens (Outlook's Loop-based editor
+      // fragmenting text mid-word, sometimes across different parent elements, being the
+      // known case).
       if (!wrapped) {
-        try {
-          const mergedNode = mergeNodesForMatch(el, issue.original, activeRange);
-          if (mergedNode) {
-            const localIdx = mergedNode.textContent.indexOf(issue.original);
-            if (localIdx !== -1) {
-              wrapped = wrapNodeAtIndex(mergedNode, localIdx, issue, issues, el);
-            }
-          }
-        } catch (e) {
-          console.warn("[ProsePilot] cross-node wrap error:", issue.original, e);
-        }
-        // The merge (if it happened) changed the DOM, so refresh textNodes before the next
-        // issue in this loop searches it.
+        wrapped = wrapCrossNodeMatch(el, issue, issues, activeRange);
+        // The DOM changed if that succeeded, so refresh textNodes before the next issue in
+        // this loop searches it.
         if (wrapped) textNodes = collectTextNodes(el);
       }
 
