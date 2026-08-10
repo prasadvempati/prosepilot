@@ -732,6 +732,20 @@ if (!window.__prosepilot_bridge_installed) {
           // resolves the inheritance chain correctly and reports false for "false" — the
           // raw attribute-presence selector can't do either.
           if (el.hasAttribute("contenteditable") && !el.isContentEditable) return;
+          // readOnly (and its cousin disabled) means the user literally cannot type into
+          // this field — found via a real bug report: a searchable-but-not-editable "DBA"
+          // dropdown (the user can only pick from a list, not type free text) was getting
+          // grammar-checked as if its display value were prose the user had written. Any
+          // field the user can't type into by definition never contains user-authored text,
+          // so there's nothing for ProsePilot to legitimately check.
+          if ((el.tagName === "INPUT" || el.tagName === "TEXTAREA") && (el.readOnly || el.disabled)) return;
+          // A file-upload input's value is always security-masked by the browser as
+          // "C:\fakepath\<filename>" (that literal string, regardless of the real OS) — found
+          // via a real bug report: a custom file-upload widget's "selected filename" display
+          // input mirrors that masked value, and ProsePilot was grammar-checking the fake path
+          // itself (flagging "fakepath" as a spelling error). This value can never be prose the
+          // user typed, so skip any field whose current value matches that pattern.
+          if (el.tagName === "INPUT" && /^[A-Za-z]:\\fakepath\\/i.test(el.value || "")) return;
           if (!monitored.has(el) && isVisible(el) && isLargeEnough(el) && !isSearchBox(el)) {
             elements.push(el);
           }
@@ -1766,6 +1780,19 @@ if (!window.__prosepilot_bridge_installed) {
     }
 
     const text = getElementText(el);
+
+    // A file-upload input can start out empty (and get legitimately monitored while empty)
+    // and only take on its browser-masked "C:\fakepath\<filename>" value later, once the user
+    // actually picks a file — after the element is already being monitored, the findEditables()
+    // discovery-time check for this same pattern doesn't get a second chance to run. Catch it
+    // here too, at every check, so a file selection made after monitoring started still doesn't
+    // get treated as prose.
+    if (el.tagName === "INPUT" && /^[A-Za-z]:\\fakepath\\/i.test(text)) {
+      clearUnderlines(el);
+      issueMap.delete(el);
+      return;
+    }
+
     if (text.length > MAX_CHECK_LENGTH) {
       clearUnderlines(el);
       issueMap.delete(el);
