@@ -204,7 +204,15 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     // period appended right after the comma ("Hello Abraham,."). The base character
     // class only ever checked for . ! ? } " anywhere in the line, not what the line
     // actually ends with, which is what let this false positive through.
-    { pattern: /^([A-Z][^.!?}\n"]+)(?<![,:;])$/gm, replacement: "$1.", category: "punctuation", rule: "missing_period", explanation: "Sentences should end with a period." },
+    //
+    // Requires an internal \s (i.e. at least two words) before the line qualifies — found
+    // via a real bug report: a standalone single-word line like "Teresa" (a bare-name email
+    // salutation, e.g. addressing the recipient with just their name on its own line before
+    // the message body — extremely common in the Outlook/email context this extension is
+    // used in) was being flagged as a sentence missing a period ("Teresa" -> "Teresa."). A
+    // lone capitalized word on its own line is virtually always a name, header, or label,
+    // never an incomplete declarative sentence, so it shouldn't trigger this rule at all.
+    { pattern: /^([A-Z][^.!?}\n"]*\s[^.!?}\n"]+)(?<![,:;])$/gm, replacement: "$1.", category: "punctuation", rule: "missing_period", explanation: "Sentences should end with a period." },
     // Double punctuation
     { pattern: /\.\./g, replacement: "...", category: "punctuation", rule: "double_period", explanation: "Use an ellipsis (...) not double periods." },
     // Missing comma after introductory/conditional clause
