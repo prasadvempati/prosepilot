@@ -46,15 +46,32 @@ const app = Fastify({
 // --- Plugins ---
 
 await app.register(cors, {
-  origin: process.env.NODE_ENV === "production"
-    ? [
-        "https://prosepilot.io",
-        "https://www.prosepilot.io",
-        // TODO: Replace with your published extension ID: chrome-extension://<YOUR_EXTENSION_ID>
-        // Find it at chrome://extensions after publishing to Chrome Web Store
-        ...(process.env.CORS_EXTENSION_ID ? [new RegExp(`^chrome-extension://${process.env.CORS_EXTENSION_ID}$`)] : []),
-      ]
-    : true,
+  origin:
+    process.env.NODE_ENV === "production"
+      ? (origin, cb) => {
+          // No Origin header at all (e.g. a server-to-server call, or some extension
+          // background-script fetches) — nothing to check against, allow it through.
+          if (!origin) return cb(null, true);
+
+          if (origin === "https://prosepilot.io" || origin === "https://www.prosepilot.io") {
+            return cb(null, true);
+          }
+
+          // Both Chrome Web Store and Edge Add-ons extensions run on Chromium and use the
+          // same "chrome-extension://<id>" origin scheme — but the two stores assign
+          // *different* IDs to the same codebase, so a single hardcoded ID (the previous
+          // approach, gated behind an unset CORS_EXTENSION_ID env var) could never cover
+          // both at once, and in practice covered neither since the variable was never set.
+          // Any chrome-extension:// origin is already sandboxed and permission-gated by the
+          // browser's own extension model, so allowing the scheme generically (rather than
+          // pinning to one store's ID) is safe and store-agnostic.
+          if (/^chrome-extension:\/\//.test(origin)) {
+            return cb(null, true);
+          }
+
+          cb(new Error("Not allowed by CORS"), false);
+        }
+      : true,
   credentials: true,
 });
 
