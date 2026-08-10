@@ -256,23 +256,24 @@ export function LandingPage({ isSignedIn, onStartWriting }: LandingPageProps) {
               </svg>
               Install for Chrome
             </a>
-            {/* Edge listing is still "In review" in Microsoft Partner Center (submitted
-                2026-07-29) — not live yet, so this is a disabled placeholder rather than a link
-                to the unpublished listing or the old zip. Swap to the real Edge Add-ons URL once
-                Microsoft approves it. */}
-            <span
-              className="inline-flex items-center gap-3 px-8 py-4 bg-surface-50 border-2 border-surface-200 text-ink-400 rounded-xl font-semibold text-lg cursor-not-allowed"
-              title="Edge extension is pending Microsoft review"
+            {/* Edge listing approved and published 2026-08-10 (v1.0.13). Points at the live
+                Microsoft Edge Add-ons listing, same auto-update rationale as the Chrome link
+                above — Edge users get silent background updates from the store. */}
+            <a
+              href="https://microsoftedge.microsoft.com/addons/detail/prosepilot/femogklhnfdfnmlolomahpkccogbjong"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-brand-500 to-brand-600 text-white rounded-xl font-semibold text-lg shadow-lg shadow-brand-500/25 hover:shadow-xl hover:shadow-brand-500/30 hover:-translate-y-0.5 transition-all"
             >
               <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
                 <path d="M12 2L2 19.5h20L12 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
                 <circle cx="12" cy="14" r="3" fill="currentColor"/>
               </svg>
-              Edge — Coming soon
-            </span>
+              Install for Edge
+            </a>
           </div>
           <p className="mt-6 text-sm text-ink-400">
-            Chrome installs and updates automatically from the Chrome Web Store. Edge support is on the way.
+            Chrome and Edge both install and update automatically from their respective stores.
           </p>
         </div>
       </section>
