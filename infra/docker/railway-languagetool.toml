@@ -3,7 +3,14 @@ builder = "dockerfile"
 dockerfilePath = "infra/docker/languagetool.Dockerfile"
 
 [deploy]
-healthcheckPath = "/v2/languages"
-healthcheckTimeout = 120
+# No healthcheckPath: LanguageTool's embedded HTTP server doesn't reliably
+# serve a no-argument endpoint that both (a) returns 2xx and (b) is actually
+# reachable through Railway's health-checker (confirmed via deploy logs:
+# "/" returns 400 without query params; "/v2/languages" received zero
+# incoming requests at all). This service is internal-only (reached via
+# languagetool.railway.internal by the main API), and the container has
+# booted reliably in ~1s across every deploy attempt, so skipping the
+# healthcheck here is low-risk. Railway treats an unset healthcheckPath as
+# "skip healthcheck, succeed once Deploy completes."
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 5
