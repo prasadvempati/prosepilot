@@ -1339,7 +1339,22 @@ if (!window.__prosepilot_bridge_installed) {
       }
 
       if (!wrapped) {
-        console.warn("[ProsePilot] Could not find text node containing:", JSON.stringify(issue.original));
+        // Diagnostic: getElementText() (innerText-based) is what built the text sent to
+        // the server and passed the staleness check, but wrapIssuesInSpans/wrapCrossNodeMatch
+        // search a *different* string — the raw textContent of collectTextNodes(). These can
+        // genuinely disagree (innerText collapses whitespace / follows rendering rules;
+        // textContent doesn't, and can include content invisible to innerText or miss content
+        // innerText includes). Logging both here lets us see exactly where they diverge
+        // instead of guessing.
+        const liveText = getElementText(el);
+        const domJoined = collectTextNodes(el).map((n) => n.textContent).join("");
+        console.warn(
+          "[ProsePilot] Could not find text node containing:", JSON.stringify(issue.original),
+          "\n  getElementText() contains it:", liveText.includes(issue.original),
+          "\n  DOM textContent join contains it:", domJoined.includes(issue.original),
+          "\n  getElementText() === DOM textContent join:", liveText === domJoined,
+          "\n  getElementText() length:", liveText.length, "DOM join length:", domJoined.length
+        );
       }
     }
 
