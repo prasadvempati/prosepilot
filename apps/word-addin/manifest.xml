@@ -3,7 +3,7 @@
             xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
             xsi:type="TaskPaneApp">
-  <Id>mnpmjdacolkglhmmbelekiohpbagcgbn</Id>
+  <Id>7f797e5a-ea61-4bb1-bf73-590ddb2c7e11</Id>
   <Version>1.0.0</Version>
   <ProviderName>ProsePilot</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
