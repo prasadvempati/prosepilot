@@ -22,13 +22,17 @@ packages/
 
 Single Railway service covers **both** `services/api` (Fastify) and the built `apps/web/dist` (served statically via `fastifyStatic` from within the same Fastify app in `services/api/src/index.ts`). One `git push` to `master` triggers `pnpm turbo build`, which builds and deploys both together.
 
-The **extension is not auto-published to the Chrome Web Store** — it's distributed as a static zip (`apps/web/public/prosepilot-extension.zip`) that users manually download and "Load unpacked" in `chrome://extensions`. Since the zip lives inside `apps/web/public/`, it DOES redeploy automatically on every push to `master` — no separate step, as long as the zip file itself is current in the repo. **As of 2026-08-07 the zip is current**: repackaged, `manifest.json` bumped to v1.0.7, commit `881f36f`, contains every fix through this date. If `apps/extension/*.js` changes again later, the zip must be manually rebuilt and re-committed — it does not auto-regenerate from source on build. Rebuild command:
+The extension now ships through **two channels**, and both need the zip rebuilt manually — neither auto-regenerates from source on build:
+1. **Chrome Web Store** (as of 2026-08-13): published, public, listing ID `gafofglaaopdifodogfifofndmogghfi`. Updates require manually uploading a new package zip via the Developer Dashboard (Build > Package > Upload new package), then submitting for review — this is a manual step outside the Railway deploy, not automatic.
+2. **Static zip fallback** — `apps/web/public/prosepilot-extension.zip`, for users who manually download and "Load unpacked" in `chrome://extensions`. Lives inside `apps/web/public/`, so it DOES redeploy automatically on every push to `master`, as long as the zip file itself is current in the repo.
+
+**As of 2026-08-13 both zips are current** at v1.0.15 (adds the local/instant spellcheck tier — `lib/nspell.js` + `lib/dictionary/`, background-service-worker resident — plus fixes for: Outlook Loop-editor underline rendering, `isEditable()` false positives on buttons/dropdowns, a WeakMap-iteration crash in the popup's disable handler, and word-boundary space loss on applied fixes (`services/api/src/engine/grammar.ts`, server-side, needs its own Railway deploy separately from the extension zips)). Root copy also kept at `prosepilot-extension-v1.0.15.zip` for reference. Rebuild command (now includes `lib/`, added when the local spellcheck tier shipped):
 ```
 cd apps/extension
-zip -r prosepilot-extension.zip manifest.json background.js content.js popup.html popup.js icons
+zip -r prosepilot-extension.zip manifest.json background.js content.js popup.html popup.js icons lib
 cp prosepilot-extension.zip ../web/public/prosepilot-extension.zip
 ```
-(bump `manifest.json`'s `version` field first, commit both files together)
+(bump `manifest.json`'s `version` field first, commit both files together — then separately upload the same zip to the Chrome Web Store Developer Dashboard if this is a Store-published version, not just the static fallback)
 
 ## Grammar-check architecture (backend)
 

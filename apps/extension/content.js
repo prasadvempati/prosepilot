@@ -32,6 +32,10 @@ if (!window.__prosepilot_bridge_installed) {
   const API_BASE = "https://prosepilot.io";
   const DEBOUNCE_MS = 300;
   const MIN_TEXT_LENGTH = 10;
+  // Local spellcheck tier's debounce — no network round trip to amortize (see
+  // handleSpellcheckLocal in background.js), so it can react much faster than the AI tier's
+  // DEBOUNCE_MS while still coalescing rapid keystrokes into one message pass.
+  const LOCAL_DEBOUNCE_MS = 120;
   const STORAGE_KEY = "prosepilot_grammar_mode";
   const DISABLED_KEY = "prosepilot_disabled";
   const IGNORED_WORDS_KEY = "prosepilot_ignored_words";
@@ -69,8 +73,14 @@ if (!window.__prosepilot_bridge_installed) {
 
   // Track which elements we're monitoring
   const monitored = new WeakSet();
-  // Track current issues per element
-  const issueMap = new WeakMap();
+  // Track current issues per element. `let`, not `const` — WeakMap has no .clear()/iteration
+  // support by design (that's the whole point of "weak"), so the "disable" handler below can't
+  // empty an existing WeakMap; it drops the reference and assigns a fresh one instead.
+  let issueMap = new WeakMap();
+  // Local (instant, offline spellcheck-only) tier's issues per element — kept separate from
+  // issueMap (the AI/LanguageTool tier) so the two independently-timed checks never clobber
+  // each other's results. See docs/local-spellcheck-scope.md and renderMerged() below.
+  let localIssueMap = new WeakMap();
   // Track active popup
   let activePopup = null;
   // Track current mode. Auto-correct mode was removed (too many bug classes came from
@@ -612,7 +622,7 @@ if (!window.__prosepilot_bridge_installed) {
       hidePopup();
       showToast("✓ Rewrite applied");
       // Re-check the new text so any remaining grammar issues still get flagged
-      setTimeout(() => triggerCheck(el), 300);
+      setTimeout(() => { triggerCheck(el); triggerLocalCheck(el); }, 300);
     });
 
     setTimeout(() => {
@@ -1095,6 +1105,105 @@ if (!window.__prosepilot_bridge_installed) {
     });
   }
 
+  // ==================== LOCAL (INSTANT) SPELLCHECK TIER ====================
+  //
+  // Purely additive speed layer — see docs/local-spellcheck-scope.md. Flags misspelled words
+  // via the bundled offline dictionary (background.js/lib/nspell.js) on a short debounce, with
+  // zero effect on the AI/LanguageTool tier above: checkText() still runs unchanged on every
+  // check, this just gets *something* on screen faster for plain typos. Never auto-applies —
+  // same click-to-accept flow as every other issue.
+
+  // Finds word-like tokens and their character offset in one pass. Deliberately simple
+  // (letters + internal apostrophes only) — good enough for "is this word spelled right",
+  // which is all this tier does; the AI tier already handles anything needing real language
+  // understanding.
+  function tokenizeWords(text) {
+    const matches = [];
+    const re = /[A-Za-z]+(?:'[A-Za-z]+)*/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      // Skip single letters — near-100% false-positive rate ("a", "I", mid-typing fragments)
+      // and not worth a background round trip for.
+      if (m[0].length > 1) matches.push({ word: m[0], startUtf16: m.index });
+    }
+    return matches;
+  }
+
+  function localSpellcheckWords(words) {
+    return new Promise((resolve) => {
+      if (!isExtensionAlive || words.length === 0) {
+        resolve([]);
+        return;
+      }
+      try {
+        chrome.runtime.sendMessage({ action: "spellcheckLocal", words }, (response) => {
+          if (chrome.runtime.lastError) {
+            // Same fail-quiet posture as checkText's error path — this tier is a bonus, not
+            // a dependency, so a dead extension context here just means "no instant tier this
+            // time," not a warning worth surfacing on top of whatever checkText already logs.
+            resolve([]);
+            return;
+          }
+          resolve(response?.results || []);
+        });
+      } catch (e) {
+        resolve([]);
+      }
+    });
+  }
+
+  const triggerLocalCheck = createPerElementDebounce(async (el) => {
+    if (!isExtensionAlive || isDisabled || currentMode === "none") return;
+
+    const text = getElementText(el);
+    if (!text || text.trim().length < MIN_TEXT_LENGTH || text.length > MAX_CHECK_LENGTH) {
+      localIssueMap.delete(el);
+      renderMerged(el);
+      return;
+    }
+
+    const tokens = tokenizeWords(text);
+    if (tokens.length === 0) return;
+
+    // One round trip for every unique word rather than one per occurrence — a paragraph
+    // repeating the same typo doesn't need to ask the dictionary twice.
+    const uniqueWords = [...new Set(tokens.map((t) => t.word.toLowerCase()))];
+    const results = await localSpellcheckWords(uniqueWords);
+
+    // The live text can change while that message round trip was in flight (same race
+    // checkText's caller already guards against below) — bail rather than render offsets
+    // computed against text that's no longer there.
+    if (getElementText(el) !== text) return;
+
+    const misspelled = new Map(results.filter((r) => r.misspelled).map((r) => [r.word, r.suggestions]));
+    if (misspelled.size === 0) {
+      localIssueMap.delete(el);
+      renderMerged(el);
+      return;
+    }
+
+    const issues = tokens
+      .filter((t) => misspelled.has(t.word.toLowerCase()))
+      .map((t) => {
+        const suggestions = misspelled.get(t.word.toLowerCase());
+        return {
+          id: `local_${t.startUtf16}_${t.word}`,
+          category: "spelling",
+          rule: null,
+          original: t.word,
+          replacement: suggestions && suggestions[0] ? suggestions[0] : t.word,
+          explanation: "Possible spelling mistake",
+          startUtf16: t.startUtf16,
+          confidence: 0.6,
+          safeAuto: false,
+        };
+      })
+      .filter((i) => !isIgnored(i.original));
+
+    localIssueMap.set(el, issues);
+    renderMerged(el);
+  }, LOCAL_DEBOUNCE_MS);
+
   // ==================== SUGGEST MODE ====================
 
   function renderUnderlines(el, issues) {
@@ -1245,13 +1354,14 @@ if (!window.__prosepilot_bridge_installed) {
     // genuine cross-node spans here.
     if (startIdx === -1 || endIdx === -1 || endIdx === startIdx) return false;
 
-    // Same caret-safety rule as the fast path: never touch a range that includes the node
-    // the live caret is anchored to. Skip this issue this round rather than risk the cursor
-    // jumping — it'll just get picked up on the next check once the user's moved past it.
-    if (activeRange) {
-      for (let i = startIdx; i <= endIdx; i++) {
-        if (activeRange.startContainer === nodes[i]) return false;
-      }
+    // Same caret-safety rule as the fast path (see its comment): only refuse when the caret
+    // is actually inside the matched span's global character range, not merely anchored to
+    // one of the nodes the span happens to pass through. Skip this issue this round rather
+    // than risk the cursor jumping — it'll just get picked up on the next check once the
+    // user's moved past it.
+    if (activeRange && el.contains(activeRange.startContainer)) {
+      const caretGlobal = getGlobalOffset(el, activeRange.startContainer, activeRange.startOffset);
+      if (caretGlobal >= globalIdx && caretGlobal <= matchEnd) return false;
     }
 
     try {
@@ -1331,11 +1441,40 @@ if (!window.__prosepilot_bridge_installed) {
       let wrapped = false;
       for (const node of textNodes) {
         if (wrapped) break;
-        if (activeRange && activeRange.startContainer === node) continue;
         const localIdx = node.textContent.indexOf(issue.original);
         if (localIdx === -1) continue;
+        // Only refuse when the caret is truly inside the matched span itself (mid-word,
+        // actively being typed) — not merely "somewhere in this node". Outlook's Loop editor
+        // (cloud.microsoft) can keep an entire paragraph as one live text node, so blanket-
+        // skipping any node the caret happens to occupy meant a word flagged earlier in the
+        // same paragraph could never get underlined while the user kept typing later in that
+        // same node: the fast path always lost this node to the skip, the cross-node fallback
+        // correctly refuses same-node matches (see its own comment), and the issue silently
+        // never rendered — this was the root cause of ProsePilot appearing to "not pick up
+        // errors at all" while composing in Outlook. The caret is still safe either way:
+        // caretOffset/restoreCaretOffset (above/below) relocate it by *global* character
+        // offset after any split, independent of this per-node check.
+        if (
+          activeRange &&
+          activeRange.startContainer === node &&
+          activeRange.startOffset >= localIdx &&
+          activeRange.startOffset <= localIdx + issue.original.length
+        ) {
+          continue;
+        }
         try {
           wrapped = wrapNodeAtIndex(node, localIdx, issue, issues, el);
+          // wrapNodeAtIndex splices the DOM (splits this node into before/span/after and
+          // detaches the original), so the `textNodes` array captured at the top of
+          // wrapIssuesInSpans is now stale — it still holds a reference to the now-detached
+          // original node. Left unrefreshed, the *next* issue in this same pass would search
+          // that dead node, find the text via its still-populated (but disconnected)
+          // .textContent, and then fail silently inside wrapNodeAtIndex itself (parentNode is
+          // null on a detached node) — exactly the "found text, still couldn't wrap it" failure
+          // mode, just one issue later than the caret-skip bug above. Only the cross-node
+          // fallback refreshed this before; the much more common same-node fast path needs to
+          // as well, or every issue after the first one in a given text node silently drops.
+          if (wrapped) textNodes = collectTextNodes(el);
         } catch (e) {
           console.warn("[ProsePilot] wrap error:", issue.original, e);
         }
@@ -1776,6 +1915,7 @@ if (!window.__prosepilot_bridge_installed) {
     if (currentMode === "none") {
       clearUnderlines(el);
       issueMap.delete(el);
+      localIssueMap.delete(el);
       return;
     }
 
@@ -1790,17 +1930,20 @@ if (!window.__prosepilot_bridge_installed) {
     if (el.tagName === "INPUT" && /^[A-Za-z]:\\fakepath\\/i.test(text)) {
       clearUnderlines(el);
       issueMap.delete(el);
+      localIssueMap.delete(el);
       return;
     }
 
     if (text.length > MAX_CHECK_LENGTH) {
       clearUnderlines(el);
       issueMap.delete(el);
+      localIssueMap.delete(el);
       return;
     }
     if (!text || text.trim().length < MIN_TEXT_LENGTH) {
       clearUnderlines(el);
       issueMap.delete(el);
+      localIssueMap.delete(el);
       lastCheckedText.delete(el);
       return;
     }
@@ -1843,8 +1986,27 @@ if (!window.__prosepilot_bridge_installed) {
     // flagging the same fix. Anything reaching this point has already passed the
     // stale-text guard above, and wrapIssuesInSpans/renderUnderlines fail gracefully (skip,
     // don't corrupt) for any individual issue that still doesn't match by the time it runs.
-    renderUnderlines(el, issues);
+    renderMerged(el);
   }, DEBOUNCE_MS);
+
+  // Combines the AI/LanguageTool tier's issues (issueMap) with the local spellcheck tier's
+  // issues (localIssueMap) into the single list renderUnderlines actually draws. The two
+  // tiers run on independent timers (local is much faster), so this is the one place their
+  // output comes together rather than each tier fighting the other's render.
+  //
+  // Dedup is by matched text, not position — simpler than reconciling offsets between two
+  // independently-computed checks, and sufficient here since the only failure mode being
+  // guarded against is "the same misspelled word gets two underlines" (one from each tier),
+  // not subtly-different spans. The AI tier always wins a duplicate: it's slower but sees
+  // full context, so if it's already flagged a word the faster-but-dumber local guess adds
+  // nothing.
+  function renderMerged(el) {
+    const remoteIssues = issueMap.get(el) || [];
+    const localIssues = localIssueMap.get(el) || [];
+    const remoteWords = new Set(remoteIssues.map((i) => i.original.toLowerCase()));
+    const merged = remoteIssues.concat(localIssues.filter((i) => !remoteWords.has(i.original.toLowerCase())));
+    renderUnderlines(el, merged);
+  }
 
   // ==================== ELEMENT OBSERVER ====================
 
@@ -1857,10 +2019,11 @@ if (!window.__prosepilot_bridge_installed) {
     const diagLen = diagText.length;
     console.log(`[ProsePilot] Monitoring ${el.tagName} ce=${el.contentEditable} h=${el.offsetHeight} text="${diagText.substring(0, 60)}" len=${diagLen}`);
 
-    el.addEventListener("input", () => triggerCheck(el));
+    el.addEventListener("input", () => { triggerCheck(el); triggerLocalCheck(el); });
     el.addEventListener("keyup", (e) => {
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(e.key)) {
         triggerCheck(el);
+        triggerLocalCheck(el);
       }
     });
 
@@ -1879,7 +2042,7 @@ if (!window.__prosepilot_bridge_installed) {
     // For contentEditable, observe DOM mutations (but debounce aggressively)
     if (el.contentEditable === "true" || el.contentEditable === "") {
       const observer = new MutationObserver(() => {
-        if (!isRenderingUnderlines && !isAutoCorrecting) triggerCheck(el);
+        if (!isRenderingUnderlines && !isAutoCorrecting) { triggerCheck(el); triggerLocalCheck(el); }
       });
       observer.observe(el, { childList: true, subtree: true, characterData: true });
 
@@ -1891,6 +2054,9 @@ if (!window.__prosepilot_bridge_installed) {
         if (text && text.trim().length >= MIN_TEXT_LENGTH && lastCheckedText.get(el) !== text) {
           triggerCheck(el);
         }
+        if (text && text.trim().length >= MIN_TEXT_LENGTH) {
+          triggerLocalCheck(el);
+        }
       }, 1000);
     }
   }
@@ -1898,10 +2064,31 @@ if (!window.__prosepilot_bridge_installed) {
   // ==================== INITIALIZE ====================
 
   // Detect if an element is an editable text field
+  //
+  // This is the focus-driven counterpart to findEditables()'s querySelectorAll scan (see
+  // "KEY fix for Outlook" below) — it has to apply the *same* exclusions, or anything that
+  // gets to it via a focusin event bypasses every filter findEditables() already enforces.
+  // Real bug report: a YottaReal "DBA" picker (a disabled/read-only combobox input showing
+  // "Cherry Creek") and a WebForms <input type="submit" value="Generate Report"> button were
+  // both getting focused, waved through as "editable", and grammar-checked as if their
+  // display value were prose the user had typed — hence "Sentences should end with a
+  // period" on a button label.
   function isEditable(el) {
     if (!el || el.nodeType !== 1) return false;
     const tag = el.tagName;
-    if (tag === "TEXTAREA" || tag === "INPUT") return true;
+    if (tag === "TEXTAREA" || tag === "INPUT") {
+      if (el.readOnly || el.disabled) return false;
+      if (tag === "INPUT") {
+        // Mirror findEditables()'s "input[type='text'], input:not([type])" selectors —
+        // buttons, submits, checkboxes, files, etc. are never user-authored prose.
+        const typeAttr = el.getAttribute("type");
+        const type = typeAttr ? typeAttr.toLowerCase() : null;
+        if (type !== null && type !== "text") return false;
+        if (/^[A-Za-z]:\\fakepath\\/i.test(el.value || "")) return false;
+        if (isSearchBox(el)) return false;
+      }
+      return true;
+    }
     const ce = el.getAttribute("contenteditable");
     if (ce === "true" || ce === "" || ce === "plaintext-only") return true;
     if (el.getAttribute("role") === "textbox") return true;
@@ -1965,6 +2152,7 @@ if (!window.__prosepilot_bridge_installed) {
           const text = getElementText(editable);
           if (text && text.trim().length >= MIN_TEXT_LENGTH) {
             triggerCheck(editable);
+            triggerLocalCheck(editable);
           }
         }, 500);
       }
@@ -1995,7 +2183,7 @@ if (!window.__prosepilot_bridge_installed) {
         if (msg.action === "setMode") {
           saveMode(msg.mode);
           lastCheckedText.delete(focusedElement);
-          if (focusedElement) triggerCheck(focusedElement);
+          if (focusedElement) { triggerCheck(focusedElement); triggerLocalCheck(focusedElement); }
         } else if (msg.action === "enable") {
           isDisabled = false;
           chrome.storage.local.remove(DISABLED_KEY);
@@ -2005,15 +2193,19 @@ if (!window.__prosepilot_bridge_installed) {
           if (focusedElement) {
             lastCheckedText.delete(focusedElement);
             triggerCheck(focusedElement);
+            triggerLocalCheck(focusedElement);
           }
         } else if (msg.action === "disable") {
           isDisabled = true;
           chrome.storage.local.set({ [DISABLED_KEY]: true });
-          // Clear underlines on ALL monitored elements
-          for (const [el] of issueMap) {
-            clearUnderlines(el);
-          }
-          issueMap.clear();
+          // Clear underlines on every element we can currently find, then drop both issue
+          // WeakMaps and start fresh. (Previously this did `for (const [el] of issueMap)` and
+          // `issueMap.clear()` — WeakMap supports neither iteration nor .clear(), so this threw
+          // a TypeError on every single click of "disable" in the popup.)
+          findEditables().forEach((el) => clearUnderlines(el));
+          if (focusedElement) clearUnderlines(focusedElement);
+          issueMap = new WeakMap();
+          localIssueMap = new WeakMap();
           hideIcon();
         }
       });

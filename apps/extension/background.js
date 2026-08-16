@@ -1,6 +1,57 @@
 // ProsePilot Background Service Worker
 
+// nspell (bundled, browser-global — see lib/nspell.js) needs to be loaded before it's used
+// below. importScripts is synchronous and only valid in a classic (non-module) service
+// worker, which is what manifest.json declares (no "type": "module").
+importScripts("lib/nspell.js");
+
 const API_BASE = "https://prosepilot.io";
+
+// --- Local (instant, offline) spellcheck tier ---
+//
+// Separate from the AI/LanguageTool pipeline in handleCheckInline below — this exists purely
+// to close the latency gap vs. native browser/Microsoft Editor spellcheck (see
+// docs/local-spellcheck-scope.md). It only ever flags misspelled words; it never touches
+// grammar/tone, and it never gates or replaces the AI call — checkInline below still runs on
+// every check, unchanged, so grammar coverage can't get worse. This tier is purely additive.
+//
+// Lazily initialized (not at top-level) because MV3 service workers get evicted after ~30s
+// idle, wiping module-level state — a fresh `await getSpellChecker()` next call just re-runs
+// this and re-fetches/re-parses the dictionary (a few hundred ms, one-time per wake), rather
+// than assuming a previous initialization is still around.
+let spellCheckerPromise = null;
+function getSpellChecker() {
+  if (!spellCheckerPromise) {
+    spellCheckerPromise = (async () => {
+      const [affRes, dicRes] = await Promise.all([
+        fetch(chrome.runtime.getURL("lib/dictionary/index.aff")),
+        fetch(chrome.runtime.getURL("lib/dictionary/index.dic")),
+      ]);
+      const [aff, dic] = await Promise.all([affRes.text(), dicRes.text()]);
+      return self.ProsePilotNSpell(aff, dic);
+    })().catch((e) => {
+      // Reset so the next call retries instead of permanently caching a failed load.
+      spellCheckerPromise = null;
+      throw e;
+    });
+  }
+  return spellCheckerPromise;
+}
+
+async function handleSpellcheckLocal(words, sendResponse) {
+  try {
+    const spell = await getSpellChecker();
+    const results = (words || []).map((word) => {
+      if (spell.correct(word)) return { word, misspelled: false, suggestions: [] };
+      return { word, misspelled: true, suggestions: spell.suggest(word).slice(0, 3) };
+    });
+    sendResponse({ results });
+  } catch (e) {
+    // Fail safe — the AI/LanguageTool tier still covers spelling either way, this tier is
+    // purely a speed bonus, so an init/load failure here should never surface as an error.
+    sendResponse({ results: [] });
+  }
+}
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -43,6 +94,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === "checkInline") {
     handleCheckInline(message.text, sendResponse, !!message.lightweight);
+    return true;
+  }
+
+  if (message.action === "spellcheckLocal") {
+    handleSpellcheckLocal(message.words, sendResponse);
     return true;
   }
 
