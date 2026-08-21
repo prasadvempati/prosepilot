@@ -464,6 +464,30 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
   };
 }
 
+// Returns the start index of whichever occurrence of `needle` in `text` is closest to
+// `hint` (an approximate/possibly-wrong offset), or -1 if `needle` doesn't appear at all.
+// Used to relocate an AI-reported issue whose offset didn't line up with the text: for a
+// needle that appears more than once (a pronoun, a repeated name), picking the occurrence
+// nearest the model's own (roughly-right) offset is far safer than always taking the very
+// first occurrence in the document.
+function findClosestOccurrence(text: string, needle: string, hint: number): number {
+  if (!needle) return -1;
+  let best = -1;
+  let bestDist = Infinity;
+  let searchFrom = 0;
+  while (true) {
+    const idx = text.indexOf(needle, searchFrom);
+    if (idx === -1) break;
+    const dist = Math.abs(idx - hint);
+    if (dist < bestDist) {
+      best = idx;
+      bestDist = dist;
+    }
+    searchFrom = idx + 1;
+  }
+  return best;
+}
+
 async function callDeepSeekForIssues(text: string): Promise<GrammarIssue[]> {
   try {
     // Computed up front (not just for tagging issues, as before) so we can check the cache
@@ -618,8 +642,17 @@ Return ONLY the JSON array, no other text.`;
         continue;
       }
 
-      // Offset is wrong — search for the original text in the document
-      const foundIndex = text.indexOf(original);
+      // Offset is wrong — search for the original text in the document. DeepSeek's reported
+      // `start` is usually in the right neighborhood even when it doesn't line up exactly
+      // (off-by-a-few from unicode/JSON counting quirks), so pick whichever occurrence of
+      // `original` is CLOSEST to that reported offset rather than blindly the first one in
+      // the whole document. A naive text.indexOf(original) here previously meant that for
+      // any word appearing more than once (a pronoun like "he", a repeated name), an issue
+      // correctly identified further into the text would get relocated back to the word's
+      // very first occurrence instead — e.g. flagging the ambiguous "he" in "...help while he
+      // is sending..." but the fix landing on the unambiguous "he" in "Nisar said he spoke"
+      // right after its own antecedent, because that "he" happened to come first.
+      const foundIndex = findClosestOccurrence(text, original, start);
       if (foundIndex === -1) {
         // Original text not found at all — skip this issue
         // Skip silently — do not log user text

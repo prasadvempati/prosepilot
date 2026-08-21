@@ -1074,6 +1074,29 @@ if (!window.__prosepilot_bridge_installed) {
     };
   }
 
+  // Returns the start index of whichever occurrence of `needle` in `text` is closest to
+  // `hint` (an approximate offset), or -1 if `needle` doesn't appear at all. Mirrors
+  // findClosestOccurrence in services/api/src/engine/grammar.ts — same reasoning: a needle
+  // that appears more than once (a repeated word/phrase) shouldn't always resolve to the
+  // very first occurrence in the document when the exact offset doesn't line up.
+  function findClosestOccurrence(text, needle, hint) {
+    if (!needle) return -1;
+    let best = -1;
+    let bestDist = Infinity;
+    let searchFrom = 0;
+    while (true) {
+      const idx = text.indexOf(needle, searchFrom);
+      if (idx === -1) break;
+      const dist = Math.abs(idx - hint);
+      if (dist < bestDist) {
+        best = idx;
+        bestDist = dist;
+      }
+      searchFrom = idx + 1;
+    }
+    return best;
+  }
+
   // ==================== GRAMMAR CHECK ====================
 
   async function checkText(text, lightweight = false) {
@@ -1113,6 +1136,27 @@ if (!window.__prosepilot_bridge_installed) {
   // check, this just gets *something* on screen faster for plain typos. Never auto-applies —
   // same click-to-accept flow as every other issue.
 
+  // Lowercase industry jargon the bundled dictionary has never heard of but that shows up
+  // constantly in this app's real usage (property management) — e.g. "makeready"/"make-ready"
+  // (the process of turning a vacated unit for a new tenant). nspell correctly flags it as
+  // unknown and then "corrects" it to whichever real word is closest by edit distance
+  // ("makers"), which is a pure false positive, not a typo. Unlike the ALL-CAPS acronym case
+  // below, these are ordinary-looking lowercase words, so they need to be named explicitly
+  // rather than caught by a pattern. Add more terms here as they come up.
+  const CUSTOM_DICTIONARY = new Set(["makeready", "makereadies"]);
+
+  // ALL-CAPS tokens (optionally with a trailing lowercase "s" for a plural — "NTVs", "PMs",
+  // "DMs") are almost always acronyms or internal jargon rather than typos. nspell's
+  // dictionary has no notion of a property-management team's acronyms, so left unfiltered
+  // it flags them as misspelled and "corrects" them to whatever real word is closest by edit
+  // distance — e.g. "NTVs" -> "TVs" — which is virtually always wrong and, unlike a genuine
+  // typo suggestion, actively misleading. Skipping them here matches how every mainstream
+  // spellchecker (Word included) treats all-caps tokens by default.
+  function isLikelyAcronym(word) {
+    const base = /^[A-Z]+s$/.test(word) ? word.slice(0, -1) : word;
+    return base.length >= 2 && /^[A-Z]+$/.test(base);
+  }
+
   // Finds word-like tokens and their character offset in one pass. Deliberately simple
   // (letters + internal apostrophes only) — good enough for "is this word spelled right",
   // which is all this tier does; the AI tier already handles anything needing real language
@@ -1123,8 +1167,11 @@ if (!window.__prosepilot_bridge_installed) {
     let m;
     while ((m = re.exec(text)) !== null) {
       // Skip single letters — near-100% false-positive rate ("a", "I", mid-typing fragments)
-      // and not worth a background round trip for.
-      if (m[0].length > 1) matches.push({ word: m[0], startUtf16: m.index });
+      // and not worth a background round trip for. Skip likely acronyms and known jargon for
+      // the reasons above.
+      if (m[0].length > 1 && !isLikelyAcronym(m[0]) && !CUSTOM_DICTIONARY.has(m[0].toLowerCase())) {
+        matches.push({ word: m[0], startUtf16: m.index });
+      }
     }
     return matches;
   }
@@ -1166,8 +1213,14 @@ if (!window.__prosepilot_bridge_installed) {
     if (tokens.length === 0) return;
 
     // One round trip for every unique word rather than one per occurrence — a paragraph
-    // repeating the same typo doesn't need to ask the dictionary twice.
-    const uniqueWords = [...new Set(tokens.map((t) => t.word.toLowerCase()))];
+    // repeating the same typo doesn't need to ask the dictionary twice. Preserve case:
+    // nspell's dictionary stores proper nouns (e.g. "Wednesday") capitalized, and lower-
+    // casing the query before checking made nspell flag the (correctly capitalized) word
+    // as misspelled purely because "wednesday" isn't a dictionary entry — with its own
+    // top suggestion being the properly-cased word, i.e. identical to what was already
+    // there. That produced no-op "Wednesday" → "Wednesday" suggestions. Checking the word
+    // as-typed lets nspell's own case handling do the right thing.
+    const uniqueWords = [...new Set(tokens.map((t) => t.word))];
     const results = await localSpellcheckWords(uniqueWords);
 
     // The live text can change while that message round trip was in flight (same race
@@ -1183,9 +1236,9 @@ if (!window.__prosepilot_bridge_installed) {
     }
 
     const issues = tokens
-      .filter((t) => misspelled.has(t.word.toLowerCase()))
+      .filter((t) => misspelled.has(t.word))
       .map((t) => {
-        const suggestions = misspelled.get(t.word.toLowerCase());
+        const suggestions = misspelled.get(t.word);
         return {
           id: `local_${t.startUtf16}_${t.word}`,
           category: "spelling",
@@ -1198,6 +1251,9 @@ if (!window.__prosepilot_bridge_installed) {
           safeAuto: false,
         };
       })
+      // Belt-and-suspenders: never surface a "fix" that doesn't actually change anything
+      // (e.g. a dictionary suggestion that round-trips back to the original word).
+      .filter((i) => i.replacement !== i.original)
       .filter((i) => !isIgnored(i.original));
 
     localIssueMap.set(el, issues);
@@ -1251,6 +1307,17 @@ if (!window.__prosepilot_bridge_installed) {
     // how carefully the offset math afterward tries to restore position. Leaving that one
     // span alone for this render pass costs nothing: it'll be re-evaluated (and re-cleared
     // if actually fixed or gone) on the next check once the caret has moved elsewhere.
+    //
+    // That protection has to expire, though: if the caret sits inside (or near) a flagged
+    // span while the user edits *around* it — inserting a word just before it, for
+    // instance — the span's live text can end up different from the issue.original it was
+    // created from, while still being "caret-inside" protected on every subsequent check.
+    // Left unguarded, that span (and its frozen, now-wrong original/replacement pair) can
+    // survive indefinitely, showing a stale popup and — worse — corrupting the text if
+    // Accepted, since Accept swaps the whole span for the old cached replacement regardless
+    // of what's actually in it by then. Comparing against the dataset.original snapshot
+    // catches exactly that: only protect the span if its content still matches what it was
+    // flagged for.
     const hadFocus = document.activeElement === el || el.contains(document.activeElement);
     const sel = hadFocus ? window.getSelection() : null;
     const activeRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
@@ -1260,7 +1327,8 @@ if (!window.__prosepilot_bridge_installed) {
     const clearInRoot = (root) => {
       const spans = root.querySelectorAll(".prosepilot-underline, .prosepilot-stale");
       spans.forEach((span) => {
-        if (activeRange && span.contains(activeRange.startContainer)) return;
+        const stillMatches = span.dataset.original === undefined || span.textContent === span.dataset.original;
+        if (activeRange && stillMatches && span.contains(activeRange.startContainer)) return;
         const parent = span.parentNode;
         if (!parent) return;
         const textNode = document.createTextNode(span.textContent);
@@ -1287,6 +1355,10 @@ if (!window.__prosepilot_bridge_installed) {
     const span = document.createElement("span");
     span.className = "prosepilot-underline";
     span.dataset.issueId = issue.id;
+    // Snapshot of the exact text this span was created to represent — lets clearUnderlines()
+    // detect when a span's live content has since diverged from the issue it's bound to (see
+    // the staleness check there) without needing to re-look-up the issue object.
+    span.dataset.original = issue.original;
     span.textContent = problemText;
     span.style.textDecorationLine = "underline";
     span.style.textDecorationStyle = "wavy";
@@ -1676,12 +1748,17 @@ if (!window.__prosepilot_bridge_installed) {
     // Handlers
     popup.querySelector(".prosepilot-close").addEventListener("click", hidePopup);
     popup.querySelector(".prosepilot-skip").addEventListener("click", () => {
-      // Remove the underline span when user skips/dismisses
+      // Remove the underline span when user skips/dismisses — restore whatever text is
+      // CURRENTLY inside the span (span.textContent), not the frozen issue.original. Those
+      // normally match, but if this span went stale (its live content diverged from the
+      // issue since it was flagged — see clearUnderlines' staleness check), forcing back
+      // issue.original would silently throw away whatever the user actually typed there.
+      // "Skip" should only ever mean "stop flagging this," never "revert my edit."
       const safeId = CSS.escape(String(issue.id));
       const span = editableEl.querySelector(`.prosepilot-underline[data-issue-id="${safeId}"]`);
       if (span) {
         const parent = span.parentNode;
-        parent.replaceChild(document.createTextNode(issue.original), span);
+        parent.replaceChild(document.createTextNode(span.textContent), span);
         parent.normalize();
       }
       hidePopup();
@@ -1694,6 +1771,20 @@ if (!window.__prosepilot_bridge_installed) {
       // Find the underline span for this issue and replace it directly
       const safeId = CSS.escape(String(issue.id));
       const span = editableEl.querySelector(`.prosepilot-underline[data-issue-id="${safeId}"]`);
+      // Stale-span guard: if the span's live text no longer matches what this issue was
+      // flagged for (the user edited in/around it since — see clearUnderlines' matching
+      // staleness check), swapping in the frozen replacement would silently overwrite
+      // whatever they actually typed. Bail and force a fresh check instead of corrupting
+      // the text — same "fail gracefully rather than misplace an edit" rule this file
+      // already follows in patchIssueOffsets above.
+      if (span && span.textContent !== issue.original) {
+        hidePopup();
+        showToast("Text changed — re-checking...");
+        isRenderingUnderlines = false;
+        triggerCheck(editableEl);
+        triggerLocalCheck(editableEl);
+        return;
+      }
       if (span) {
         const parent = span.parentNode;
         const replacementNode = document.createTextNode(issue.replacement);
@@ -1857,7 +1948,13 @@ if (!window.__prosepilot_bridge_installed) {
       if (issue.startUtf16 !== null && issue.startUtf16 !== undefined && text.substring(issue.startUtf16, issue.startUtf16 + issue.original.length) === issue.original) {
         idx = issue.startUtf16;
       } else {
-        idx = text.indexOf(issue.original);
+        // The stored offset didn't line up — fall back to a text search, but for a word/
+        // phrase that appears more than once, pick whichever occurrence is closest to the
+        // (stale but usually roughly-right) stored offset rather than always the first one
+        // in the whole field. Same reasoning as findClosestOccurrence server-side: a blind
+        // first-match here would risk "fixing" a different, unrelated occurrence of a
+        // repeated word instead of the one actually flagged.
+        idx = findClosestOccurrence(text, issue.original, issue.startUtf16 ?? 0);
       }
 
       if (idx === -1) {
