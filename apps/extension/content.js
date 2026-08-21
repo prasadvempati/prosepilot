@@ -36,6 +36,17 @@ if (!window.__prosepilot_bridge_installed) {
   // handleSpellcheckLocal in background.js), so it can react much faster than the AI tier's
   // DEBOUNCE_MS while still coalescing rapid keystrokes into one message pass.
   const LOCAL_DEBOUNCE_MS = 120;
+  // How long to wait after the last keystroke before actually painting underlines (splitting
+  // text nodes to insert <span>s). Checking (both tiers) still runs on its own faster debounce
+  // above — this only delays the DOM-mutating render step. Rich editors like Gmail's compose
+  // box track cursor/selection state internally, separately from the browser's native Selection
+  // API; splicing text nodes and programmatically restoring the caret right as the user resumes
+  // typing can land a beat behind that internal state, dropping or misplacing the next
+  // keystroke(s) (real report: "and the attach" rendered as "and  h attac"). Waiting for an
+  // actual pause before mutating the DOM removes the collision — see the blur handler in
+  // observeElement() for the complementary "render immediately once you've left the field"
+  // path, so results aren't hidden for a full second after you tab away mid-pause.
+  const RENDER_DEBOUNCE_MS = 1000;
   const STORAGE_KEY = "prosepilot_grammar_mode";
   const DISABLED_KEY = "prosepilot_disabled";
   const IGNORED_WORDS_KEY = "prosepilot_ignored_words";
@@ -1205,7 +1216,7 @@ if (!window.__prosepilot_bridge_installed) {
     const text = getElementText(el);
     if (!text || text.trim().length < MIN_TEXT_LENGTH || text.length > MAX_CHECK_LENGTH) {
       localIssueMap.delete(el);
-      renderMerged(el);
+      debouncedRenderMerged(el);
       return;
     }
 
@@ -1231,7 +1242,7 @@ if (!window.__prosepilot_bridge_installed) {
     const misspelled = new Map(results.filter((r) => r.misspelled).map((r) => [r.word, r.suggestions]));
     if (misspelled.size === 0) {
       localIssueMap.delete(el);
-      renderMerged(el);
+      debouncedRenderMerged(el);
       return;
     }
 
@@ -1257,7 +1268,7 @@ if (!window.__prosepilot_bridge_installed) {
       .filter((i) => !isIgnored(i.original));
 
     localIssueMap.set(el, issues);
-    renderMerged(el);
+    debouncedRenderMerged(el);
   }, LOCAL_DEBOUNCE_MS);
 
   // ==================== SUGGEST MODE ====================
@@ -2083,7 +2094,9 @@ if (!window.__prosepilot_bridge_installed) {
     // flagging the same fix. Anything reaching this point has already passed the
     // stale-text guard above, and wrapIssuesInSpans/renderUnderlines fail gracefully (skip,
     // don't corrupt) for any individual issue that still doesn't match by the time it runs.
-    renderMerged(el);
+    // Painting itself is further debounced (see RENDER_DEBOUNCE_MS) so the DOM-splicing
+    // underline render doesn't land while the user is still actively typing.
+    debouncedRenderMerged(el);
   }, DEBOUNCE_MS);
 
   // Combines the AI/LanguageTool tier's issues (issueMap) with the local spellcheck tier's
@@ -2104,6 +2117,15 @@ if (!window.__prosepilot_bridge_installed) {
     const merged = remoteIssues.concat(localIssues.filter((i) => !remoteWords.has(i.original.toLowerCase())));
     renderUnderlines(el, merged);
   }
+
+  // Debounced wrapper around renderMerged for the passive, typing-triggered call sites
+  // (both check tiers, after they've resolved new issues). See RENDER_DEBOUNCE_MS above for
+  // why the actual DOM paint needs its own, longer pause than the checks themselves. Direct,
+  // immediate calls to renderMerged/renderUnderlines elsewhere (e.g. after the user clicks
+  // Accept/Skip/Ignore on a specific issue) are deliberately left alone — those are one-off
+  // user-initiated actions with no risk of colliding with the next keystroke, so there's no
+  // reason to delay the visible feedback for them.
+  const debouncedRenderMerged = createPerElementDebounce(renderMerged, RENDER_DEBOUNCE_MS);
 
   // ==================== ELEMENT OBSERVER ====================
 
@@ -2129,6 +2151,10 @@ if (!window.__prosepilot_bridge_installed) {
       focusedElement = el;
     });
     el.addEventListener("blur", () => {
+      // Once focus has left the field there's no more risk of colliding with the next
+      // keystroke, so paint any pending issues right away instead of leaving them hidden for
+      // up to RENDER_DEBOUNCE_MS after the user has already moved on (e.g. clicked Send).
+      renderMerged(el);
       setTimeout(() => {
         if (document.activeElement === document.body) {
           focusedElement = null;
