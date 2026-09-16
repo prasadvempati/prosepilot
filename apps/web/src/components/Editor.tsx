@@ -31,7 +31,7 @@ const TONES = [
 ];
 
 export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewriting, mode, tone = "professional", onToneChange, liveCheck = false, onLiveCheck }: EditorProps) {
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCheckedTextRef = useRef<string>("");
 
   // Live checking: debounce and check as user types
