@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 interface EditorProps {
   text: string;
@@ -10,6 +10,8 @@ interface EditorProps {
   mode: "check" | "rewrite";
   tone?: string;
   onToneChange?: (tone: string) => void;
+  liveCheck?: boolean;
+  onLiveCheck?: (text: string) => void;
 }
 
 const TONES = [
@@ -28,7 +30,37 @@ const TONES = [
   { value: "elevated", label: "Elevated" },
 ];
 
-export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewriting, mode, tone = "professional", onToneChange }: EditorProps) {
+export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewriting, mode, tone = "professional", onToneChange, liveCheck = false, onLiveCheck }: EditorProps) {
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const lastCheckedTextRef = useRef<string>("");
+
+  // Live checking: debounce and check as user types
+  useEffect(() => {
+    if (!liveCheck || !onLiveCheck) return;
+    
+    // Don't check if text hasn't changed or is too short
+    if (!text.trim() || text.trim().length < 10 || text === lastCheckedTextRef.current) {
+      return;
+    }
+
+    // Clear existing debounce
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    // Set new debounce (500ms for web app)
+    debounceRef.current = setTimeout(() => {
+      lastCheckedTextRef.current = text;
+      onLiveCheck(text);
+    }, 500);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [text, liveCheck, onLiveCheck]);
+
   const handlePaste = useCallback(async () => {
     try {
       const clipText = await navigator.clipboard.readText();

@@ -1,0 +1,51 @@
+version: "3.8"
+
+services:
+  # LanguageTool grammar checking service (free, self-hosted)
+  # ~512MB RAM, catches grammar/spelling/style issues
+  languagetool:
+    image: erikvl87/languagetool:latest
+    container_name: prosepilot-languagetool
+    ports:
+      - "8010:8010"
+    environment:
+      # Java memory allocation for LanguageTool
+      - JAVA_OPTS=-Xms256m -Xmx512m
+      # Language rules to load (en-US is the default)
+      - languageTool_languageRules=en
+      - languageTool wyłączone_rules=
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    # Limit resources for Railway's Hobby plan
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+          cpus: "0.5"
+
+  # ProsePilot API server
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    container_name: prosepilot-api
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - DATABASE_URL=${DATABASE_URL}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - LANGUAGETOOL_URL=http://languagetool:8010
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+    depends_on:
+      languagetool:
+        condition: service_healthy
+    restart: unless-stopped

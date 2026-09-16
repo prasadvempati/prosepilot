@@ -56,8 +56,8 @@ interface LTMatch {
 }
 
 async function callLanguageTool(text: string): Promise<GrammarIssue[]> {
-  // Skip if LanguageTool URL is not configured or points to localhost (not deployed on Railway)
-  if (!process.env.LANGUAGETOOL_URL || LANGUAGETOOL_URL === "http://localhost:8010") {
+  // Skip if LanguageTool URL is not configured
+  if (!process.env.LANGUAGETOOL_URL) {
     return [];
   }
   try {
@@ -294,6 +294,68 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     { pattern: /\bcondition exterior\b/gi, replacement: "exterior condition", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'exterior condition' not 'condition exterior'." },
     { pattern: /\breadiness unit\b/gi, replacement: "unit readiness", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'unit readiness' not 'readiness unit'." },
     { pattern: /\bupdates progress\b/gi, replacement: "progress updates", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'progress updates' not 'updates progress'." },
+
+    // === COMMONLY CONFUSED WORDS ===
+    // their/there/they're
+    { pattern: /\btheir\s+going\b/gi, replacement: "they're going", category: "grammar", rule: "confused_word", explanation: "Use 'they're' (they are) not 'their' (possessive)." },
+    { pattern: /\btheir\s+here\b/gi, replacement: "they're here", category: "grammar", rule: "confused_word", explanation: "Use 'they're' (they are) not 'their' (possessive)." },
+    { pattern: /\btheir\s+is\b/gi, replacement: "there is", category: "grammar", rule: "confused_word", explanation: "Use 'there' (location) not 'their' (possessive)." },
+    // your/you're
+    { pattern: /\byour\s+welcome\b/gi, replacement: "you're welcome", category: "grammar", rule: "confused_word", explanation: "Use 'you're' (you are) not 'your' (possessive)." },
+    { pattern: /\byour\s+right\b/gi, replacement: "you're right", category: "grammar", rule: "confused_word", explanation: "Use 'you're' (you are) not 'your' (possessive)." },
+    // its/it's
+    { pattern: /\bits\s+a\b/gi, replacement: "it's a", category: "grammar", rule: "confused_word", explanation: "Use 'it's' (it is) not 'its' (possessive)." },
+    { pattern: /\bits\s+the\b/gi, replacement: "it's the", category: "grammar", rule: "confused_word", explanation: "Use 'it's' (it is) not 'its' (possessive)." },
+    // who's/whose
+    { pattern: /\bwho's\s+car\b/gi, replacement: "whose car", category: "grammar", rule: "confused_word", explanation: "Use 'whose' (possessive) not 'who's' (who is)." },
+    { pattern: /\bwho's\s+idea\b/gi, replacement: "whose idea", category: "grammar", rule: "confused_word", explanation: "Use 'whose' (possessive) not 'who's' (who is)." },
+    // affect/effect (common confusion)
+    { pattern: /\bhave\s+an\s+affect\b/gi, replacement: "have an effect", category: "grammar", rule: "confused_word", explanation: "Use 'effect' (noun) not 'affect' (verb) after 'an'." },
+    // then/than
+    { pattern: /\bmore\s+\w+\s+then\b/gi, replacement: (m: string) => m.replace(/\bthen\b/gi, "than"), category: "grammar", rule: "confused_word", explanation: "Use 'than' for comparisons, not 'then' (time)." },
+    { pattern: /\bbetter\s+\w+\s+then\b/gi, replacement: (m: string) => m.replace(/\bthen\b/gi, "than"), category: "grammar", rule: "confused_word", explanation: "Use 'than' for comparisons, not 'then' (time)." },
+    // could of/should of/would of (phonetic misspelling)
+    { pattern: /\bcould\s+of\b/gi, replacement: "could have", category: "grammar", rule: "could_of", explanation: "Use 'could have' not 'could of'." },
+    { pattern: /\bshould\s+of\b/gi, replacement: "should have", category: "grammar", rule: "should_of", explanation: "Use 'should have' not 'should of'." },
+    { pattern: /\bwould\s+of\b/gi, replacement: "would have", category: "grammar", rule: "would_of", explanation: "Use 'would have' not 'would of'." },
+    { pattern: /\bmight\s+of\b/gi, replacement: "might have", category: "grammar", rule: "might_of", explanation: "Use 'might have' not 'might of'." },
+    { pattern: /\bmust\s+of\b/gi, replacement: "must have", category: "grammar", rule: "must_of", explanation: "Use 'must have' not 'must of'." },
+
+    // === WORDINESS / CONCISENESS ===
+    { pattern: /\bin order to\b/gi, replacement: "to", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'in order to' → 'to'." },
+    { pattern: /\bdue to the fact that\b/gi, replacement: "because", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'due to the fact that' → 'because'." },
+    { pattern: /\bat this point in time\b/gi, replacement: "now", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'at this point in time' → 'now'." },
+    { pattern: /\bin the event that\b/gi, replacement: "if", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'in the event that' → 'if'." },
+    { pattern: /\bfor the purpose of\b/gi, replacement: "to", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'for the purpose of' → 'to'." },
+    { pattern: /\bin the near future\b/gi, replacement: "soon", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'in the near future' → 'soon'." },
+    { pattern: /\ba large number of\b/gi, replacement: "many", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'a large number of' → 'many'." },
+    { pattern: /\bin spite of\b/gi, replacement: "despite", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'in spite of' → 'despite'." },
+    { pattern: /\bwith regard to\b/gi, replacement: "about", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'with regard to' → 'about'." },
+    { pattern: /\bin regards to\b/gi, replacement: "about", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'in regards to' → 'about'." },
+    { pattern: /\bthe reason why is\b/gi, replacement: "because", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'the reason why is' → 'because'." },
+    { pattern: /\bhas the ability to\b/gi, replacement: "can", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'has the ability to' → 'can'." },
+    { pattern: /\bis able to\b/gi, replacement: "can", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'is able to' → 'can'." },
+
+    // === PASSIVE VOICE (common patterns) ===
+    { pattern: /\bwas\s+written\s+by\b/gi, replacement: (m: string) => m, category: "style", rule: "passive_voice", explanation: "Consider active voice: 'X wrote this' instead of 'this was written by X'." },
+    { pattern: /\bwere\s+created\s+by\b/gi, replacement: (m: string) => m, category: "style", rule: "passive_voice", explanation: "Consider active voice: 'X created these' instead of 'these were created by X'." },
+    { pattern: /\bwas\s+completed\s+by\b/gi, replacement: (m: string) => m, category: "style", rule: "passive_voice", explanation: "Consider active voice: 'X completed it' instead of 'it was completed by X'." },
+
+    // === MISSING COMMA IN COMPOUND SENTENCES ===
+    // "I went to the store and I bought milk" → "I went to the store, and I bought milk"
+    { pattern: /\b(I|[A-Z][a-z]+)\s+\w+\s+\w+\s+and\s+(I|[A-Z][a-z]+)\s+\w+/g, replacement: (m: string) => {
+      const parts = m.split(/\s+and\s+/);
+      if (parts.length === 2 && parts[0].split(' ').length >= 3 && parts[1].split(' ').length >= 2) {
+        return parts[0] + ', and ' + parts[1];
+      }
+      return m;
+    }, category: "punctuation", rule: "comma_before_and", explanation: "Use a comma before 'and' joining two independent clauses." },
+
+    // === REPEATED WORDS ===
+    { pattern: /\b(the|a|an|is|are|was|were|have|has|had|do|does|did|can|could|will|would|shall|should|may|might|must)\s+\1\b/gi, replacement: "$1", category: "grammar", rule: "repeated_word", explanation: "Word is repeated." },
+
+    // === MISSING SUBJECT ===
+    { pattern: /\b(is|are|was|were|have|has|had|do|does|did|can|could|will|would|shall|should|may|might|must)\s+(going|coming|running|walking|working|playing|eating|sleeping|trying|making|taking|giving|getting|looking|seeing|thinking|knowing|wanting|needing|feeling|being|becoming|having|saying|finding|telling|asking|using|working|calling|trying|following|keeping|beginning|seeming|helping|showing|hearing|providing|standing|reading|spending|growing|opening|walking|offering|remembering|loving|considering|appearing|buying|waiting|serving|dying|sending|expecting|building|staying|falling|cutting|reaching|killing|remaining|suggesting|raising|passing|serving|selling|requiring|reporting|deciding|pulling|developing)\b/gi, replacement: (m: string) => "I " + m, category: "grammar", rule: "missing_subject", explanation: "Sentence appears to be missing a subject." },
   ];
 
   for (const rule of rules) {
@@ -568,6 +630,16 @@ SPECIFIC PATTERNS TO CHECK:
 - CONTRAST VS ADDITIVE TRANSITIONS: "on the other hand"/"however"/"in contrast" must introduce a genuinely contrasting idea, not another supporting point — "Rent is up 5%. On the other hand, occupancy also improved" (both are good news, not a contrast) → "In addition, occupancy also improved". Only flag when the two ideas clearly don't oppose each other.
 - ADVERB MISUSED TO MODIFY A NOUN: adverbs modify verbs/adjectives, not nouns — "a dramatically increase"→"a dramatic increase" (adjective+noun) or "increased dramatically" (verb+adverb).
 - ARTICLE WITH COUNTRY/PLACE NAMES: no "the" before most country names — "in the Japan"→"in Japan"; "many people in the Texas"→"in Texas". Exception: abbreviated or plural/collective place names keep "the" — "the U.K.", "the U.S.A.", "the Philippines".
+- COULD OF/SHOULD OF/WOULD OF: phonetic misspellings of "could have"/"should have"/"would have" — "I could of gone"→"I could have gone" or "I could've gone".
+- REPEATED WORDS: accidental word repetition — "the the"→"the", "is is"→"is", "to to"→"to".
+- COMMA SPLICE: two independent clauses joined by just a comma (no conjunction) — "I went to the store, I bought milk"→"I went to the store and bought milk" or use a semicolon.
+- DANGLING MODIFIER: a modifier that doesn't logically attach to the subject — "Walking to the store, the rain started" (who is walking?) → "Walking to the store, I got caught in the rain".
+- SQUINTING MODIFIER: a modifier placed between two things it could modify — "Students who study often get good grades" (study often? or often get?) → reposition for clarity.
+- MISSING SERIAL OXFORD COMMA: in a list of 3+ items, add comma before "and"/"or" — "red, white and blue"→"red, white, and blue".
+- DOUBLE NEGATIVE: two negatives making a positive — "I don't have no money"→"I don't have any money" or "I have no money".
+- WHO VS WHOM: "who" for subjects, "whom" for objects — "Who did you call?"→"Whom did you call?"; "The person who I met"→"The person whom I met".
+- AMBIGUOUS ONLY PLACEMENT: "only" should be directly before the word it modifies — "I only eat vegetables"→"I eat only vegetables" (if that's the meaning).
+- WORD ORDER IN QUESTIONS: subject-auxiliary inversion — "You are coming?"→"Are you coming?"
 
 Be AGGRESSIVE about finding issues. Even small improvements count. Return issues for EVERY mistake you find, no matter how minor.
 

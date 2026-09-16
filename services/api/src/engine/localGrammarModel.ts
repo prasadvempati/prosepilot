@@ -76,6 +76,12 @@ const LEMMA_GROUPS = [
   ["is", "are", "was", "were", "am", "be", "been", "being"],
   ["do", "does", "did"],
   ["a", "an"],
+  ["this", "that", "these", "those"],
+  ["here", "there"],
+  ["now", "then"],
+  ["my", "your", "his", "her", "our", "their"],
+  ["me", "you", "him", "her", "us", "them"],
+  ["I", "you", "he", "she", "it", "we", "they"],
 ];
 function sameLemmaGroup(a: string, b: string): boolean {
   const al = a.toLowerCase();
@@ -98,6 +104,13 @@ const AMBIGUOUS_WORD_FIXES: Record<string, string> = {
   your: "you're",
   their: "they're",
   whose: "who's",
+  hes: "he's",
+  shes: "she's",
+  thats: "that's",
+  whats: "what's",
+  theres: "there's",
+  heres: "here's",
+  lets: "let's",
 };
 
 // Found via an adversarial test pass (deliberately trying to break the checker before any
@@ -173,7 +186,12 @@ function classify(original: string, replacement: string): Classification {
   const dist = editDistance(o, r);
   const sameStart = o[0]?.toLowerCase() === r[0]?.toLowerCase();
   const lenDiff = Math.abs(o.length - r.length);
-  if (dist <= 2 && sameStart && lenDiff <= 2 && o.length >= 2) {
+  // Expanded typo detection: allow edit distance up to 2 for words 4+ letters,
+  // and distance 1 for shorter words. Same starting letter required for safety.
+  if (o.length >= 4 && dist <= 2 && sameStart && lenDiff <= 2) {
+    return { safe: true, reason: `typo fix (edit distance ${dist})`, category: "spelling", explanation: "Possible misspelling." };
+  }
+  if (o.length >= 2 && o.length < 4 && dist <= 1 && sameStart) {
     return { safe: true, reason: `typo fix (edit distance ${dist})`, category: "spelling", explanation: "Possible misspelling." };
   }
 
