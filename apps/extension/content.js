@@ -56,7 +56,7 @@ if (!window.__prosepilot_bridge_installed) {
   // caused) and the user asked to hide it from view until it's actually fixed and verified,
   // rather than leaving a visibly-broken feature live on a commercial product. Flip back to
   // true once the timeout issue is resolved and tested — no other code needs to change.
-  const REWRITE_FEATURE_ENABLED = false;
+  const REWRITE_FEATURE_ENABLED = true;
 
   // Tones the /v1/rewrite backend accepts (mirrors RewriteTone in packages/writing-core/src/types.ts,
   // minus "custom" — custom instructions need a text input, left for a later iteration).
@@ -547,10 +547,22 @@ if (!window.__prosepilot_bridge_installed) {
   async function rewriteTextRequest(text, tone) {
     if (!isExtensionAlive) return { error: "Extension not available. Please reload the page." };
     return new Promise((resolve) => {
+      let settled = false;
+      // Safety timeout: if the background script hangs or the extension context dies,
+      // this ensures the UI doesn't stay stuck on "Rewriting..." forever.
+      const safetyTimer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          resolve({ error: "Rewrite timed out. Please try again." });
+        }
+      }, 65000);
       try {
         chrome.runtime.sendMessage(
           { action: "rewriteText", text, tone, token: clerkToken },
           (response) => {
+            if (settled) return; // already timed out
+            settled = true;
+            clearTimeout(safetyTimer);
             if (chrome.runtime.lastError) {
               const msg = chrome.runtime.lastError.message || "";
               if (msg.includes("Extension context invalidated") || msg.includes("Receiving end does not exist")) {
@@ -565,6 +577,9 @@ if (!window.__prosepilot_bridge_installed) {
           }
         );
       } catch (e) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(safetyTimer);
         isExtensionAlive = false;
         resolve({ error: "Extension not available. Please reload the page." });
       }

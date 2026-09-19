@@ -100,10 +100,31 @@ function sameLemmaGroup(a: string, b: string): boolean {
 // the expected contraction; anything else the model proposes for them is rejected outright
 // rather than risking a meaning-changing "fix" slipping through as auto-safe.
 const AMBIGUOUS_WORD_FIXES: Record<string, string> = {
+  // Possessive/contraction pairs where both forms are valid English words
   its: "it's",
   your: "you're",
   their: "they're",
   whose: "who's",
+  // Contracted forms without apostrophes (NO valid standalone spelling — the T5 model
+  // can output destructive "fixes" like "dont"→"do" instead of "don't" via edit-distance,
+  // so these must be whitelisted here as a safety net alongside the rule-engine regexes
+  // in grammar.ts)
+  dont: "don't",
+  cant: "can't",
+  wont: "won't",
+  isnt: "isn't",
+  wasnt: "wasn't",
+  werent: "weren't",
+  hasnt: "hasn't",
+  havent: "haven't",
+  hadnt: "hadn't",
+  wouldnt: "wouldn't",
+  shouldnt: "shouldn't",
+  couldnt: "couldn't",
+  mustnt: "mustn't",
+  neednt: "needn't",
+  shant: "shan't",
+  // Informal contracted pronoun+verb (valid standalone words, ambiguous)
   hes: "he's",
   shes: "she's",
   thats: "that's",
@@ -111,6 +132,7 @@ const AMBIGUOUS_WORD_FIXES: Record<string, string> = {
   theres: "there's",
   heres: "here's",
   lets: "let's",
+  whos: "who's",
 };
 
 // Found via an adversarial test pass (deliberately trying to break the checker before any

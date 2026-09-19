@@ -175,3 +175,39 @@ export interface UsageEvent {
   status: "success" | "error";
   createdAt: Date;
 }
+
+// ─── Tone Detection ──────────────────────────────────────────
+export interface ToneDetection {
+  /** Overall detected tone label */
+  tone: string;
+  /** Confidence score 0-1 */
+  confidence: number;
+  /** Formality score 0-1 (0=casual, 1=formal) */
+  formality: number;
+  /** Directness score 0-1 (0=hedging, 1=direct) */
+  directness: number;
+  /** Confidence level of the writing 0-1 (0=uncertain, 1=confident) */
+  assertiveness: number;
+  /** Suggested rewrite tone based on detected tone */
+  suggestedTone: RewriteTone;
+}
+
+// ─── Readability ─────────────────────────────────────────────
+export interface ReadabilityResult {
+  /** Flesch-Kincaid grade level */
+  gradeLevel: number;
+  /** Flesch reading ease score (0-100, higher = easier) */
+  readingEase: number;
+  /** Total word count */
+  wordCount: number;
+  /** Total sentence count */
+  sentenceCount: number;
+  /** Total paragraph count */
+  paragraphCount: number;
+  /** Average words per sentence */
+  avgWordsPerSentence: number;
+  /** Estimated reading time in seconds */
+  readingTimeSeconds: number;
+  /** Reading level label */
+  readingLevel: "elementary" | "middle school" | "high school" | "college" | "graduate";
+}

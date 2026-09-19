@@ -5,6 +5,7 @@ import { SuggestionPanel } from "./components/SuggestionPanel";
 import { RewritePanel } from "./components/RewritePanel";
 import { DocumentChecker } from "./components/DocumentChecker";
 import { VoiceProfilePanel } from "./components/VoiceProfilePanel";
+import { WritingGoalsDialog } from "./components/WritingGoalsDialog";
 import { Header } from "./components/Header";
 import { LandingPage } from "./components/LandingPage";
 import { useGrammarStore, setTokenGetter } from "./hooks/useGrammarStore";
@@ -61,12 +62,13 @@ export default function App() {
     };
   }, [getToken]);
   const [tab, setTab] = useState<Tab>("check");
+  const [showGoals, setShowGoals] = useState(false);
   // Signed-in users now land on the home/marketing page first, same as signed-out visitors,
   // and have to explicitly click "Start Writing" to enter the editor — previously isSignedIn
   // alone decided which of the two was shown, so a returning signed-in user was always dropped
   // straight into the textbox with no way back to a home view.
   const [view, setView] = useState<"home" | "tool">("home");
-  const { issues, isChecking, hasChecked, checkError, text, setText, checkGrammar, rewriteText, rewriteResult, isRewriting, rewriteError, tone, setTone } = useGrammarStore();
+  const { issues, isChecking, hasChecked, checkError, text, setText, checkGrammar, rewriteText, rewriteResult, isRewriting, rewriteError, tone, setTone, detectedTone, readability, writingGoals, setWritingGoals } = useGrammarStore();
 
   // Features/Pricing anchors only exist in the DOM when LandingPage is actually rendered.
   const showMarketingNav = !isSignedIn || view === "home";
@@ -86,7 +88,9 @@ export default function App() {
               windows, or Chrome's side panel eating into the viewport) the four labels
               didn't fit on one line and wrapped mid-word ("Word" / "Doc" on separate
               lines). Now the row scrolls horizontally instead of breaking the labels. */}
-          <div className="flex items-center gap-1 p-1 bg-surface-100 rounded-xl w-fit max-w-full overflow-x-auto mb-6">
+          <div className="flex items-center gap-3 mb-6">
+            {/* Tab Switcher */}
+            <div className="flex items-center gap-1 p-1 bg-surface-100 rounded-xl w-fit max-w-full overflow-x-auto">
             <button
               onClick={() => setTab("check")}
               className={`flex-shrink-0 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -149,6 +153,18 @@ export default function App() {
             </button>
           </div>
 
+          {/* Writing Goals button */}
+          <button
+            onClick={() => setShowGoals(true)}
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-surface-200 bg-surface-50 text-ink-600 hover:border-brand-300 hover:text-brand-600 transition-all text-sm"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Goals
+          </button>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Editor - hidden when document/voice tab is active */}
             {tab !== "document" && tab !== "voice" && (
@@ -163,6 +179,8 @@ export default function App() {
                   mode={tab}
                   tone={tone}
                   onToneChange={setTone}
+                  detectedTone={detectedTone}
+                  readability={readability}
                 />
               </div>
             )}
@@ -199,6 +217,15 @@ export default function App() {
           click "Start Writing" (view stays "home" by default even after sign-in). */}
       {(!isSignedIn || view === "home") && (
         <LandingPage isSignedIn={!!isSignedIn} onStartWriting={() => setView("tool")} />
+      )}
+
+      {/* Writing Goals Dialog */}
+      {showGoals && (
+        <WritingGoalsDialog
+          goals={writingGoals}
+          onSave={setWritingGoals}
+          onClose={() => setShowGoals(false)}
+        />
       )}
     </div>
   );

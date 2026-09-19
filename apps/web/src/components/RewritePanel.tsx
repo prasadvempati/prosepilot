@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { ReactNode } from "react";
 import type { RewriteResult, ProtectedFact, ElevatedWordGloss } from "@prosepilot/writing-core";
+import { wordDiff, type DiffPart } from "../lib/wordDiff";
 
 interface RewritePanelProps {
   result: RewriteResult | null;
@@ -62,8 +63,45 @@ function renderRewrittenText(text: string, glossary?: ElevatedWordGloss[]): Reac
   return nodes;
 }
 
+// Renders a word-level diff between original and rewritten text.
+// Additions appear with a blue background, deletions with a red strikethrough.
+function renderDiffView(parts: DiffPart[]): ReactNode {
+  return parts.map((part, i) => {
+    if (part.kind === "added") {
+      return (
+        <span key={i} className="bg-blue-50 text-blue-700 rounded px-0.5">
+          {part.value}
+        </span>
+      );
+    }
+    if (part.kind === "removed") {
+      return (
+        <span key={i} className="line-through text-red-400 decoration-red-300">
+          {part.value}
+        </span>
+      );
+    }
+    return <span key={i}>{part.value}</span>;
+  });
+}
+
 export function RewritePanel({ result, isRewriting, onReplace, error }: RewritePanelProps) {
   const [copied, setCopied] = useState(false);
+  const [selectedAlt, setSelectedAlt] = useState(0);
+  const [showDiff, setShowDiff] = useState(false);
+
+  // Build list of all rewrite options (primary + alternatives)
+  const allOptions = result
+    ? [result.rewritten, ...(result.alternatives || [])]
+    : [];
+  const currentText = allOptions[selectedAlt] || result?.rewritten || "";
+
+  // Compute word-level diff between original and current rewrite option
+  const diff = useMemo(
+    () => (result ? wordDiff(originalText, currentText) : []),
+    [originalText, currentText, result]
+  );
+  const hasChanges = diff.some((p) => p.kind !== "kept");
   if (isRewriting) {
     return (
       <div className="card p-12 flex flex-col items-center justify-center text-center">
@@ -106,7 +144,7 @@ export function RewritePanel({ result, isRewriting, onReplace, error }: RewriteP
   }
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(result.rewritten);
+    await navigator.clipboard.writeText(currentText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -135,9 +173,75 @@ export function RewritePanel({ result, isRewriting, onReplace, error }: RewriteP
 
       {/* Content */}
       <div className="p-5">
+        {/* Alternative selector tabs */}
+        {allOptions.length > 1 && (
+          <div className="flex items-center gap-1 mb-4 p-1 bg-surface-100 rounded-lg w-fit">
+            {allOptions.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => { setSelectedAlt(i); setCopied(false); }}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  selectedAlt === i
+                    ? "bg-surface-0 text-brand-600 shadow-sm"
+                    : "text-ink-500 hover:text-ink-700"
+                }`}
+              >
+                {i === 0 ? "Option 1" : `Option ${i + 1}`}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* View toggle: Rewritten vs Diff */}
+        {hasChanges && (
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={() => setShowDiff(false)}
+              className={`text-xs font-medium px-2.5 py-1 rounded-md transition-all ${
+                !showDiff
+                  ? "bg-surface-200 text-ink-700"
+                  : "text-ink-400 hover:text-ink-600"
+              }`}
+            >
+              Rewritten
+            </button>
+            <button
+              onClick={() => setShowDiff(true)}
+              className={`text-xs font-medium px-2.5 py-1 rounded-md transition-all flex items-center gap-1 ${
+                showDiff
+                  ? "bg-surface-200 text-ink-700"
+                  : "text-ink-400 hover:text-ink-600"
+              }`}
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              Diff
+            </button>
+          </div>
+        )}
+
+        {/* Main content area */}
         <div className="text-sm leading-relaxed text-ink-700 whitespace-pre-wrap p-4 bg-surface-50 rounded-xl border border-surface-200">
-          {renderRewrittenText(result.rewritten, result.elevatedWords)}
+          {showDiff && hasChanges
+            ? renderDiffView(diff)
+            : renderRewrittenText(currentText, result.elevatedWords)
+          }
         </div>
+
+        {/* Diff legend */}
+        {showDiff && hasChanges && (
+          <div className="flex items-center gap-4 mt-2 text-xs text-ink-400">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2.5 h-2.5 rounded bg-blue-100 border border-blue-200" />
+              Added
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2.5 h-2.5 rounded border border-red-200 line-through text-[10px] text-red-400 flex items-center justify-center">x</span>
+              Removed
+            </span>
+          </div>
+        )}
 
         {result.elevatedWords && result.elevatedWords.length > 0 && (
           <p className="text-xs text-ink-400 mt-2 flex items-center gap-1.5">
@@ -187,7 +291,7 @@ export function RewritePanel({ result, isRewriting, onReplace, error }: RewriteP
             </>
           )}
         </button>
-        <button onClick={() => onReplace(result.rewritten)} className="btn-glow flex-1 flex items-center justify-center gap-2 text-sm">
+        <button onClick={() => onReplace(currentText)} className="btn-glow flex-1 flex items-center justify-center gap-2 text-sm">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>

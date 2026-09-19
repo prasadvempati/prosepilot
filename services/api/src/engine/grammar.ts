@@ -901,37 +901,64 @@ ${text}
 """
 ${glossaryInstruction}
 
-${tone === "elevated" ? `Return the rewritten text, then the ${GLOSSARY_DELIMITER} block exactly as instructed above. Nothing else.` : "Return ONLY the rewritten text, no explanations or quotes."}`;
+Return your response as a JSON object with exactly this structure (no markdown, no explanations outside the JSON):
+{
+  "alternatives": ["first rewrite", "second rewrite", "third rewrite"]
+}
 
-  const rewritten = await callDeepSeek([
-    { role: "system", content: "You are a professional text rewriter. Return only the rewritten text, no explanations." },
+Provide exactly 3 alternative rewrites, each with a slightly different approach:
+- The first should be the most straightforward application of the tone
+- The second should take more creative liberty while staying faithful to the meaning
+- The third should be the most polished/refined version
+
+Each alternative must independently preserve all protected facts. All 3 must be valid rewrites of the same original text.`;
+
+  const rawResponse = await callDeepSeek([
+    { role: "system", content: "You are a professional text rewriter. Return valid JSON only." },
     { role: "user", content: prompt },
   ]);
 
-  // Split off the glossary block (elevated tone only) before doing any further cleanup, so the
-  // quote-stripping/trim below only ever touches the actual rewritten prose.
-  let rawRewritten = rewritten;
-  let elevatedWords: ElevatedWordGloss[] | undefined;
-  if (tone === "elevated" && rewritten.includes(GLOSSARY_DELIMITER)) {
-    const [beforeGlossary, afterGlossary] = rewritten.split(GLOSSARY_DELIMITER);
-    rawRewritten = beforeGlossary;
-    try {
-      const parsed = JSON.parse(afterGlossary.trim());
-      if (Array.isArray(parsed)) {
-        elevatedWords = parsed.filter(
-          (entry): entry is ElevatedWordGloss =>
-            entry && typeof entry.word === "string" && typeof entry.definition === "string"
-        );
+  // Parse the JSON response to extract alternatives
+  let alternatives: string[] = [];
+  let cleaned = "";
+  try {
+    // Try to extract JSON from the response (may be wrapped in markdown code fences)
+    const jsonMatch = rawResponse.match(/\{[\s\S]*"alternatives"[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(parsed.alternatives) && parsed.alternatives.length > 0) {
+        alternatives = parsed.alternatives.map((t: string) =>
+          typeof t === "string" ? t.replace(/^["']|["']$/g, "").trim() : ""
+        ).filter((t: string) => t.length > 0);
       }
-    } catch {
-      // Model didn't return valid JSON for the glossary — not worth failing the whole rewrite
-      // over a formatting hiccup on a "nice to have" feature. The rewrite itself is unaffected
-      // since we already split it off above; the UI just won't show hover definitions this time.
     }
+  } catch {
+    // JSON parse failed — fall back to treating the whole response as a single rewrite
   }
 
-  // Clean up the rewritten text (remove quotes if wrapped)
-  const cleaned = rawRewritten.replace(/^["']|["']$/g, "").trim();
+  // If no alternatives parsed successfully, use the raw response as the single rewrite
+  if (alternatives.length === 0) {
+    // Handle elevated tone glossary (legacy single-response format)
+    let rawRewritten = rawResponse;
+    let elevatedWords: ElevatedWordGloss[] | undefined;
+    if (tone === "elevated" && rawResponse.includes(GLOSSARY_DELIMITER)) {
+      const [beforeGlossary, afterGlossary] = rawResponse.split(GLOSSARY_DELIMITER);
+      rawRewritten = beforeGlossary;
+      try {
+        const parsed = JSON.parse(afterGlossary.trim());
+        if (Array.isArray(parsed)) {
+          elevatedWords = parsed.filter(
+            (entry): entry is ElevatedWordGloss =>
+              entry && typeof entry.word === "string" && typeof entry.definition === "string"
+          );
+        }
+      } catch {}
+    }
+    cleaned = rawRewritten.replace(/^["']|["']$/g, "").trim();
+    alternatives = [cleaned];
+  } else {
+    cleaned = alternatives[0];
+  }
 
   // Validate facts are preserved
   const factValidation = validateFacts(facts, cleaned);
@@ -945,8 +972,8 @@ ${tone === "elevated" ? `Return the rewritten text, then the ${GLOSSARY_DELIMITE
       tone,
       factsProtected: facts,
       factMismatch: !factValidation.match,
-      meaningSimilarity: 0.9, // TODO: implement proper similarity check
-      ...(elevatedWords && elevatedWords.length > 0 ? { elevatedWords } : {}),
+      meaningSimilarity: 0.9,
+      alternatives: alternatives.length > 1 ? alternatives.slice(1) : undefined,
     },
     usage: {
       characterCount: text.length,
@@ -989,5 +1016,109 @@ export async function validateFactsEndpoint(original: string, rewritten: string)
     match: missing.length === 0 && changed.length === 0,
     missingFacts: missing,
     changedFacts: changed,
+  };
+}
+
+// --- Tone Detection ---
+
+import { analyzeText } from "@prosepilot/writing-core";
+import type { ToneDetection, ReadabilityResult, RewriteTone } from "@prosepilot/writing-core";
+
+function deriveTone(formality: number, directness: number, assertiveness: number): { label: string; suggestedTone: RewriteTone } {
+  if (formality > 0.7) {
+    if (directness > 0.6) return { label: "Formal & Direct", suggestedTone: "executive" };
+    return { label: "Formal", suggestedTone: "formal" };
+  }
+  if (formality < 0.3) {
+    if (directness > 0.6) return { label: "Casual & Confident", suggestedTone: "confident" };
+    return { label: "Casual", suggestedTone: "casual" };
+  }
+  if (directness > 0.7) return { label: "Direct & Assertive", suggestedTone: "firm" };
+  if (directness < 0.3) return { label: "Tactful & Diplomatic", suggestedTone: "diplomatic" };
+  if (assertiveness < 0.5) return { label: "Empathetic", suggestedTone: "empathetic" };
+  return { label: "Professional", suggestedTone: "professional" };
+}
+
+export function detectTone(text: string): ToneDetection {
+  const analysis = analyzeText(text);
+  const formality = analysis.tone?.formalityScore ?? 0.5;
+  const directness = analysis.tone?.directnessScore ?? 0.5;
+  const assertiveness = analysis.tone?.confidenceScore ?? 0.5;
+  const { label, suggestedTone } = deriveTone(formality, directness, assertiveness);
+  const words = text.split(/\s+/).length;
+  const lengthConfidence = Math.min(1, words / 50);
+  const scoreConfidence = 1 - Math.abs(formality - 0.5) * 0.5 - Math.abs(directness - 0.5) * 0.5;
+  const confidence = Math.min(1, lengthConfidence * 0.6 + scoreConfidence * 0.4);
+  return { tone: label, confidence, formality, directness, assertiveness, suggestedTone };
+}
+
+// --- Readability Scores ---
+
+function countSyllables(word: string): number {
+  word = word.toLowerCase().replace(/[^a-z]/g, "");
+  if (word.length <= 3) return 1;
+  word = word.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, "");
+  word = word.replace(/^y/, "");
+  const matches = word.match(/[aeiouy]{1,2}/g);
+  return matches ? matches.length : 1;
+}
+
+function splitIntoSentences(text: string): string[] {
+  return text.split(/[.!?]+(?:\s|$)/).filter(s => s.trim().length > 0);
+}
+
+function splitIntoWords(text: string): string[] {
+  return text.split(/\s+/).filter(w => w.length > 0);
+}
+
+function readingLevelFromGrade(grade: number): ReadabilityResult["readingLevel"] {
+  if (grade < 6) return "elementary";
+  if (grade < 9) return "middle school";
+  if (grade < 13) return "high school";
+  if (grade < 16) return "college";
+  return "graduate";
+}
+
+export function computeReadability(text: string): ReadabilityResult {
+  const sentences = splitIntoSentences(text);
+  const words = splitIntoWords(text);
+  const paragraphs = text.split(/\n\n+/).filter(p => p.trim().length > 0);
+
+  const wordCount = words.length;
+  const sentenceCount = sentences.length;
+  const paragraphCount = paragraphs.length;
+
+  if (wordCount === 0 || sentenceCount === 0) {
+    return {
+      gradeLevel: 0, readingEase: 0, wordCount: 0, sentenceCount: 0,
+      paragraphCount: 0, avgWordsPerSentence: 0, readingTimeSeconds: 0,
+      readingLevel: "elementary",
+    };
+  }
+
+  const totalSyllables = words.reduce((sum, w) => sum + countSyllables(w), 0);
+  const avgWordsPerSentence = wordCount / sentenceCount;
+  const avgSyllablesPerWord = totalSyllables / wordCount;
+
+  // Flesch-Kincaid Grade Level
+  const gradeLevel = 0.39 * avgWordsPerSentence + 11.8 * avgSyllablesPerWord - 15.59;
+
+  // Flesch Reading Ease
+  const readingEase = Math.max(0, Math.min(100,
+    206.835 - 1.015 * avgWordsPerSentence - 84.6 * avgSyllablesPerWord
+  ));
+
+  // Average reading speed: ~200 words per minute for adult English
+  const readingTimeSeconds = Math.ceil((wordCount / 200) * 60);
+
+  return {
+    gradeLevel: Math.round(gradeLevel * 10) / 10,
+    readingEase: Math.round(readingEase * 10) / 10,
+    wordCount,
+    sentenceCount,
+    paragraphCount,
+    avgWordsPerSentence: Math.round(avgWordsPerSentence * 10) / 10,
+    readingTimeSeconds,
+    readingLevel: readingLevelFromGrade(gradeLevel),
   };
 }

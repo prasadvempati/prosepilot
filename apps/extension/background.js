@@ -350,8 +350,9 @@ async function handleRewriteText(text, tone, sendResponse) {
       // callDeepSeek's AbortSignal.timeout in services/api/src/engine/grammar.ts) — otherwise
       // this client-side abort fires first on a normal-but-slow response, killing a request
       // the server would have completed or failed on its own terms a few seconds later, and
-      // showing a false "timed out" error. 35s gives the server's 30s room to actually finish.
-      signal: AbortSignal.timeout(35000),
+      // showing a false "timed out" error. 60s gives the server's 30s ample room — rewrites
+      // produce longer prompts than grammar checks and DeepSeek can take 30-40s on them.
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!response.ok) {

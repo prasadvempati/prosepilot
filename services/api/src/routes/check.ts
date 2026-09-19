@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { sql, eq } from "drizzle-orm";
-import { checkGrammar, rewriteText, validateFactsEndpoint } from "../engine/grammar.js";
+import { checkGrammar, rewriteText, validateFactsEndpoint, detectTone, computeReadability } from "../engine/grammar.js";
 import { db } from "../db/index.js";
 import { users, usageEvents } from "../db/schema.js";
 import { getProfile } from "./voice-profile.js";
@@ -169,6 +169,46 @@ export async function checkRoutes(app: FastifyInstance) {
       return reply.send(result);
     } catch (error) {
       return reply.status(500).send({ error: "INTERNAL_ERROR", message: "Fact validation failed" });
+    }
+  });
+
+  // POST /v1/tone - Detect tone of text
+  app.post("/v1/tone", { preHandler: [verifyRequest] }, async (request, reply) => {
+    const { text } = request.body as any;
+
+    if (!text || typeof text !== "string") {
+      return reply.status(400).send({ error: "TEXT_REQUIRED", message: "Text field is required" });
+    }
+
+    if (text.trim().length === 0) {
+      return reply.status(400).send({ error: "TEXT_EMPTY", message: "Text cannot be empty" });
+    }
+
+    try {
+      const detection = detectTone(text);
+      return reply.send({ tone: detection });
+    } catch (error) {
+      return reply.status(500).send({ error: "INTERNAL_ERROR", message: "Tone detection failed" });
+    }
+  });
+
+  // POST /v1/readability - Compute readability scores
+  app.post("/v1/readability", { preHandler: [verifyRequest] }, async (request, reply) => {
+    const { text } = request.body as any;
+
+    if (!text || typeof text !== "string") {
+      return reply.status(400).send({ error: "TEXT_REQUIRED", message: "Text field is required" });
+    }
+
+    if (text.trim().length === 0) {
+      return reply.status(400).send({ error: "TEXT_EMPTY", message: "Text cannot be empty" });
+    }
+
+    try {
+      const readability = computeReadability(text);
+      return reply.send({ readability });
+    } catch (error) {
+      return reply.status(500).send({ error: "INTERNAL_ERROR", message: "Readability computation failed" });
     }
   });
 }

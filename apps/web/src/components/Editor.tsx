@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import type { ToneDetection, ReadabilityResult } from "@prosepilot/writing-core";
 
 interface EditorProps {
   text: string;
@@ -12,6 +13,8 @@ interface EditorProps {
   onToneChange?: (tone: string) => void;
   liveCheck?: boolean;
   onLiveCheck?: (text: string) => void;
+  detectedTone?: ToneDetection | null;
+  readability?: ReadabilityResult | null;
 }
 
 const TONES = [
@@ -30,7 +33,7 @@ const TONES = [
   { value: "elevated", label: "Elevated" },
 ];
 
-export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewriting, mode, tone = "professional", onToneChange, liveCheck = false, onLiveCheck }: EditorProps) {
+export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewriting, mode, tone = "professional", onToneChange, liveCheck = false, onLiveCheck, detectedTone, readability }: EditorProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCheckedTextRef = useRef<string>("");
 
@@ -84,6 +87,14 @@ export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewri
               {wordCount} words
             </span>
           )}
+          {detectedTone && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200" title={`Formality: ${(detectedTone.formality * 100).toFixed(0)}% · Directness: ${(detectedTone.directness * 100).toFixed(0)}%`}>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+              </svg>
+              {detectedTone.tone}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button 
@@ -135,10 +146,28 @@ export function Editor({ text, onChange, onCheck, onRewrite, isChecking, isRewri
           {/* Stats */}
           <div className="flex items-center gap-4 text-xs text-ink-500">
             <span>{charCount.toLocaleString()} characters</span>
-            <span className="text-surface-300">·</span>
-            <span className={charCount > 100000 ? "text-error font-medium" : ""}>
-              {charCount > 100000 ? "Over limit" : `${(100000 - charCount).toLocaleString()} remaining`}
-            </span>
+            {readability && (
+              <>
+                <span className="text-surface-300">·</span>
+                <span title={`Flesch-Kincaid Grade Level: ${readability.gradeLevel}`}>
+                  Grade {readability.gradeLevel}
+                </span>
+                <span className="text-surface-300">·</span>
+                <span title={`Flesch Reading Ease: ${readability.readingEase}/100`}>
+                  {readability.readingLevel}
+                </span>
+                <span className="text-surface-300">·</span>
+                <span>{Math.ceil(readability.readingTimeSeconds / 60)} min read</span>
+              </>
+            )}
+            {!readability && (
+              <>
+                <span className="text-surface-300">·</span>
+                <span className={charCount > 100000 ? "text-error font-medium" : ""}>
+                  {charCount > 100000 ? "Over limit" : `${(100000 - charCount).toLocaleString()} remaining`}
+                </span>
+              </>
+            )}
           </div>
 
           {/* Actions */}

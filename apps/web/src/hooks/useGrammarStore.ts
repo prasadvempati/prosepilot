@@ -1,5 +1,7 @@
 import { create } from "zustand";
-import type { GrammarIssue, RewriteResult } from "@prosepilot/writing-core";
+import type { GrammarIssue, RewriteResult, ToneDetection, ReadabilityResult } from "@prosepilot/writing-core";
+import type { WritingGoals } from "../components/WritingGoalsDialog";
+import { DEFAULT_GOALS } from "../components/WritingGoalsDialog";
 
 const API_BASE = "";
 
@@ -57,6 +59,14 @@ interface GrammarStore {
   voiceProfileId: string | null;
   setVoiceProfileId: (id: string | null) => void;
   checkGrammar: () => Promise<void>;
+
+  // Tone detection
+  detectedTone: ToneDetection | null;
+  // Readability scores
+  readability: ReadabilityResult | null;
+  // Writing goals
+  writingGoals: WritingGoals;
+  setWritingGoals: (goals: WritingGoals) => void;
 
   // Rewrite
   tone: string;
@@ -128,6 +138,12 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
   voiceProfileId: null,
   setVoiceProfileId: (id) => set({ voiceProfileId: id }),
 
+  detectedTone: null,
+  readability: null,
+
+  writingGoals: DEFAULT_GOALS,
+  setWritingGoals: (goals) => set({ writingGoals: goals }),
+
   tone: "professional",
   setTone: (tone) => set({ tone }),
   rewriteResult: null,
@@ -139,31 +155,59 @@ export const useGrammarStore = create<GrammarStore>((set, get) => ({
   ignoredWords: loadIgnoredWords(),
 
   checkGrammar: async () => {
-    const { text, voiceProfileId, ignoredWords } = get();
+    const { text, voiceProfileId, ignoredWords, writingGoals } = get();
     if (!text.trim()) return;
 
-    set({ isChecking: true, issues: [], checkError: null, hasChecked: false });
+    set({ isChecking: true, issues: [], checkError: null, hasChecked: false, detectedTone: null, readability: null });
 
     try {
       const headers = await authHeaders();
-      const response = await fetch(`${API_BASE}/v1/check`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ text, mode: "review", voiceProfileId }),
-      });
+      // Fire grammar check, tone detection, and readability in parallel
+      const [checkRes, toneRes, readabilityRes] = await Promise.all([
+        fetch(`${API_BASE}/v1/check`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ text, mode: "review", voiceProfileId, goals: writingGoals }),
+        }),
+        fetch(`${API_BASE}/v1/tone`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ text }),
+        }),
+        fetch(`${API_BASE}/v1/readability`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ text }),
+        }),
+      ]);
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null);
-        throw new Error(errData?.message || `Server error ${response.status}`);
+      if (!checkRes.ok) {
+        const errData = await checkRes.json().catch(() => null);
+        throw new Error(errData?.message || `Server error ${checkRes.status}`);
       }
 
-      const data = await response.json();
-      // Drop anything the user has told us to stop flagging (e.g. a proper noun that
-      // isn't actually a spelling mistake) — applies to every future check.
-      const filtered = (data.issues || []).filter(
+      const checkData = await checkRes.json();
+      const filtered = (checkData.issues || []).filter(
         (i: GrammarIssue) => !ignoredWords.has(normalizeWord(i.original))
       );
-      set({ issues: filtered, isChecking: false, hasChecked: true, checkError: null });
+
+      // Tone and readability are best-effort — don't fail the whole check if they error
+      let detectedTone = null;
+      let readability = null;
+      try {
+        if (toneRes.ok) {
+          const toneData = await toneRes.json();
+          detectedTone = toneData.tone || null;
+        }
+      } catch {}
+      try {
+        if (readabilityRes.ok) {
+          const readData = await readabilityRes.json();
+          readability = readData.readability || null;
+        }
+      } catch {}
+
+      set({ issues: filtered, isChecking: false, hasChecked: true, checkError: null, detectedTone, readability });
     } catch (error: any) {
       set({
         isChecking: false,
