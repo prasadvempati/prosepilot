@@ -1,4 +1,4 @@
-import type { CheckRequest, CheckResponse, GrammarIssue, RewriteRequest, RewriteResponse, ProtectedFact, VoiceProfile, ElevatedWordGloss } from "@prosepilot/writing-core";
+import type { CheckRequest, CheckResponse, GrammarIssue, RewriteRequest, RewriteResponse, ProtectedFact, VoiceProfile } from "@prosepilot/writing-core";
 import { extractProtectedFacts, validateFacts, computeHash, shouldShowIssue } from "@prosepilot/writing-core";
 import { sampleVocabularyExamples } from "./elevatedVocabulary.js";
 import { randomUUID } from "crypto";
@@ -938,23 +938,7 @@ Each alternative must independently preserve all protected facts. All 3 must be 
 
   // If no alternatives parsed successfully, use the raw response as the single rewrite
   if (alternatives.length === 0) {
-    // Handle elevated tone glossary (legacy single-response format)
-    let rawRewritten = rawResponse;
-    let elevatedWords: ElevatedWordGloss[] | undefined;
-    if (tone === "elevated" && rawResponse.includes(GLOSSARY_DELIMITER)) {
-      const [beforeGlossary, afterGlossary] = rawResponse.split(GLOSSARY_DELIMITER);
-      rawRewritten = beforeGlossary;
-      try {
-        const parsed = JSON.parse(afterGlossary.trim());
-        if (Array.isArray(parsed)) {
-          elevatedWords = parsed.filter(
-            (entry): entry is ElevatedWordGloss =>
-              entry && typeof entry.word === "string" && typeof entry.definition === "string"
-          );
-        }
-      } catch {}
-    }
-    cleaned = rawRewritten.replace(/^["']|["']$/g, "").trim();
+    cleaned = rawResponse.replace(/^["']|["']$/g, "").trim();
     alternatives = [cleaned];
   } else {
     cleaned = alternatives[0];
