@@ -85,7 +85,7 @@ function renderDiffView(parts: DiffPart[]): ReactNode {
   });
 }
 
-export function RewritePanel({ result, isRewriting, onReplace, error }: RewritePanelProps) {
+export function RewritePanel({ result, isRewriting, originalText, onReplace, error }: RewritePanelProps) {
   const [copied, setCopied] = useState(false);
   const [selectedAlt, setSelectedAlt] = useState(0);
   const [showDiff, setShowDiff] = useState(false);
