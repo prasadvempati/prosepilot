@@ -90,7 +90,8 @@ if (!window.__prosepilot_bridge_installed) {
   let issueMap = new WeakMap();
   // Local (instant, offline spellcheck-only) tier's issues per element — kept separate from
   // issueMap (the AI/LanguageTool tier) so the two independently-timed checks never clobber
-  // each other's results. See docs/local-spellcheck-scope.md and renderMerged() below.
+  // each other's results. Stores { text, issues } so renderMerged can drop results computed
+  // against text that has since changed (see renderMerged() below).
   let localIssueMap = new WeakMap();
   // Track active popup
   let activePopup = null;
@@ -785,6 +786,8 @@ if (!window.__prosepilot_bridge_installed) {
           if (!monitored.has(el) && isVisible(el) && isLargeEnough(el) && !isSearchBox(el)) {
             elements.push(el);
           }
+          // (isSearchBox now also covers recipient wells via isRecipientLabel + the
+          // combobox/listbox ancestor walk — see isSearchBox above.)
         });
       }
       // Recurse into shadow roots
@@ -815,16 +818,34 @@ if (!window.__prosepilot_bridge_installed) {
 
     const label = `${el.getAttribute("aria-label") || ""} ${el.getAttribute("placeholder") || ""} ${el.getAttribute("name") || ""} ${el.id || ""}`.toLowerCase();
     if (/\bsearch\b/.test(label)) return true;
+    if (isRecipientLabel(label)) return true;
 
     // ARIA authoring practice for search landmarks is <form role="search">/<div role="search">
     // wrapping the input — walk up a bounded number of ancestors (search bars are shallow) so we
     // don't accidentally exclude something because a distant, unrelated ancestor happens to have
-    // role="search" somewhere far up the tree.
+    // role="search" somewhere far up the tree. Recipient wells (Outlook To/Cc/Bcc) use the same
+    // pattern: the contenteditable chip area a user focuses is a CHILD of role="combobox" /
+    // aria-label="To recipients", so the child itself matches none of the checks above — the
+    // ancestor walk is what actually catches it. Real bug: recipient chips ("Asset Mgmt",
+    // "prasadleasing") were being grammar-checked as if they were prose.
     let ancestor = el.parentElement;
-    for (let depth = 0; ancestor && depth < 5; depth++, ancestor = ancestor.parentElement) {
-      if ((ancestor.getAttribute("role") || "").toLowerCase() === "search") return true;
+    for (let depth = 0; ancestor && depth < 6; depth++, ancestor = ancestor.parentElement) {
+      const aRole = (ancestor.getAttribute("role") || "").toLowerCase();
+      if (aRole === "search" || aRole === "combobox" || aRole === "listbox") return true;
+      const aLabel = `${ancestor.getAttribute("aria-label") || ""} ${ancestor.getAttribute("name") || ""} ${ancestor.id || ""}`.toLowerCase();
+      if (/\bsearch\b/.test(aLabel) || isRecipientLabel(aLabel)) return true;
     }
 
+    return false;
+  }
+
+  // True for To/Cc/Bcc recipient wells ("To recipients", "cc", "bcc", plain "recipients").
+  // These hold contact chips / email addresses, never user-authored prose — checking them
+  // produced false positives like "prasadleasing" → "prasdleasing" and "Asset Mgmt" flags.
+  function isRecipientLabel(label) {
+    if (!label) return false;
+    if (/\brecipients?\b/.test(label)) return true;
+    if (/^(to|cc|bcc|to recipients|cc recipients|bcc recipients)$/.test(label.trim())) return true;
     return false;
   }
 
@@ -1192,10 +1213,14 @@ if (!window.__prosepilot_bridge_installed) {
     const re = /[A-Za-z]+(?:'[A-Za-z]+)*/g;
     let m;
     while ((m = re.exec(text)) !== null) {
-      // Skip single letters — near-100% false-positive rate ("a", "I", mid-typing fragments)
-      // and not worth a background round trip for. Skip likely acronyms and known jargon for
-      // the reasons above.
-      if (m[0].length > 1 && !isLikelyAcronym(m[0]) && !CUSTOM_DICTIONARY.has(m[0].toLowerCase())) {
+      // Skip tokens shorter than 3 letters — near-100% false-positive rate and actively
+      // misleading suggestions from the dictionary's edit-distance nearest-neighbors:
+      // "Fw" (email forward prefix) → "Fa", "th" (mid-typing fragment of "that") → "eh",
+      // "Re" → "ke", etc. Two-letter tokens are almost always abbreviations, name
+      // fragments, or paused mid-keystroke — never a real typo worth surfacing. Single
+      // letters were already skipped; 3 is the empirical floor where nspell's suggestions
+      // start being useful. Also skip likely acronyms and known jargon (above).
+      if (m[0].length >= 3 && !isLikelyAcronym(m[0]) && !CUSTOM_DICTIONARY.has(m[0].toLowerCase())) {
         matches.push({ word: m[0], startUtf16: m.index });
       }
     }
@@ -1230,7 +1255,7 @@ if (!window.__prosepilot_bridge_installed) {
 
     const text = getElementText(el);
     if (!text || text.trim().length < MIN_TEXT_LENGTH || text.length > MAX_CHECK_LENGTH) {
-      localIssueMap.delete(el);
+      localIssueMap.set(el, { text: text || "", issues: [] });
       debouncedRenderMerged(el);
       return;
     }
@@ -1256,7 +1281,7 @@ if (!window.__prosepilot_bridge_installed) {
 
     const misspelled = new Map(results.filter((r) => r.misspelled).map((r) => [r.word, r.suggestions]));
     if (misspelled.size === 0) {
-      localIssueMap.delete(el);
+      localIssueMap.set(el, { text, issues: [] });
       debouncedRenderMerged(el);
       return;
     }
@@ -1282,7 +1307,12 @@ if (!window.__prosepilot_bridge_installed) {
       .filter((i) => i.replacement !== i.original)
       .filter((i) => !isIgnored(i.original));
 
-    localIssueMap.set(el, issues);
+    // Stamp with the exact text these offsets were computed against. renderMerged drops
+    // the entry if the live text has moved on — without this, a result for "th" (user
+    // paused mid-keystroke in "that") kept painting after "at" arrived, and the offset
+    // check still passed because text.substring(start, start+2) === "th" is a prefix of
+    // "that". That's the root of the "th" → "eh" false underline inside a correct word.
+    localIssueMap.set(el, { text, issues });
     debouncedRenderMerged(el);
   }, LOCAL_DEBOUNCE_MS);
 
@@ -2094,7 +2124,16 @@ if (!window.__prosepilot_bridge_installed) {
 
     // Drop anything the user has told us to stop flagging (e.g. a proper noun that isn't
     // actually a spelling mistake) — applies to every future check, not just this element.
-    const issues = rawIssues.filter((i) => !isIgnored(i.original));
+    // Also drop any remote issue whose original no longer sits at its stamped offset in the
+    // live text (belt-and-suspenders on top of the lastCheckedText guard in renderMerged —
+    // catches mid-flight DOM mutations that somehow pass the full-text equality check, e.g.
+    // an underline span being unwrapped by a concurrent render).
+    const issues = rawIssues
+      .filter((i) => !isIgnored(i.original))
+      .filter((i) => {
+        if (i.startUtf16 === null || i.startUtf16 === undefined || i.startUtf16 < 0) return true;
+        return text.substring(i.startUtf16, i.startUtf16 + i.original.length) === i.original;
+      });
     issueMap.set(el, issues);
     lastCheckedText.set(el, text);
 
@@ -2125,9 +2164,21 @@ if (!window.__prosepilot_bridge_installed) {
   // not subtly-different spans. The AI tier always wins a duplicate: it's slower but sees
   // full context, so if it's already flagged a word the faster-but-dumber local guess adds
   // nothing.
+  //
+  // Stale-result guard: both tiers stamp the exact text their offsets were computed against
+  // (local via localIssueMap's { text }, remote via lastCheckedText). If the live text has
+  // moved on, that tier's issues are dropped for this paint. Without this, a result for a
+  // prefix of the current text kept rendering — e.g. missing_period for "It has to be done
+  // through " re-anchored mid-sentence once "ads.google.com..." arrived (offset check still
+  // passed: the old original is a prefix of the new text), and a local "th"→"eh" flag from
+  // a mid-keystroke pause kept painting inside the now-correct word "that". The next real
+  // check for the current text repopulates the map; dropping a stale entry just means that
+  // tier's underlines wait for its re-check instead of lying in the meantime.
   function renderMerged(el) {
-    const remoteIssues = issueMap.get(el) || [];
-    const localIssues = localIssueMap.get(el) || [];
+    const currentText = getElementText(el);
+    const remoteIssues = lastCheckedText.get(el) === currentText ? (issueMap.get(el) || []) : [];
+    const localEntry = localIssueMap.get(el);
+    const localIssues = localEntry && localEntry.text === currentText ? localEntry.issues : [];
     const remoteWords = new Set(remoteIssues.map((i) => i.original.toLowerCase()));
     const merged = remoteIssues.concat(localIssues.filter((i) => !remoteWords.has(i.original.toLowerCase())));
     renderUnderlines(el, merged);
@@ -2228,8 +2279,18 @@ if (!window.__prosepilot_bridge_installed) {
       return true;
     }
     const ce = el.getAttribute("contenteditable");
-    if (ce === "true" || ce === "" || ce === "plaintext-only") return true;
-    if (el.getAttribute("role") === "textbox") return true;
+    if (ce === "true" || ce === "" || ce === "plaintext-only") {
+      // Same exclusions as findEditables()'s scan — without these, anything reached via
+      // focusin (Outlook To/Cc recipient chips, search bars embedded in contenteditable
+      // wells) bypasses every filter the scan applies. Real bug: recipient chips and
+      // search wells were grammar-checked as prose when focused.
+      if (isSearchBox(el)) return false;
+      return true;
+    }
+    if (el.getAttribute("role") === "textbox") {
+      if (isSearchBox(el)) return false;
+      return true;
+    }
     return false;
   }
 

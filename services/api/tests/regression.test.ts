@@ -739,6 +739,9 @@ describe("Regression — Individual Rule Spot Checks", () => {
     { rule: "double_space", input: "Hello  world", originalSnippet: "  ", replacementSnippet: " " },
     { rule: "double_period", input: "Wait..", originalSnippet: "..", replacementSnippet: "..." },
     { rule: "missing_period", input: "This is a sentence\n", originalSnippet: "sentence", replacementSnippet: "sentence." },
+    // Trailing-space line (Outlook contenteditable extraction): period must not be
+    // stranded after the space ("through ."), and the match must not straddle the newline.
+    { rule: "missing_period", input: "It has to be done through \nSeparate next line with enough length", originalSnippet: "It has to be done through", replacementSnippet: "It has to be done through." },
     { rule: "capitalize_sentence_start", input: "hello world.", originalSnippet: "h", replacementSnippet: "H" },
     { rule: "capitalize_after_period", input: "End. next.", originalSnippet: ". n", replacementSnippet: ". N" },
     { rule: "proper_noun_capitalization", input: "We use Prosepilot", originalSnippet: "Prosepilot", replacementSnippet: "ProsePilot" },

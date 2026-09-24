@@ -212,7 +212,23 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     // used in) was being flagged as a sentence missing a period ("Teresa" -> "Teresa."). A
     // lone capitalized word on its own line is virtually always a name, header, or label,
     // never an incomplete declarative sentence, so it shouldn't trigger this rule at all.
-    { pattern: /^([A-Z][^.!?}\n"]*\s[^.!?}\n"]+)(?<![,:;])$/gm, replacement: "$1.", category: "punctuation", rule: "missing_period", explanation: "Sentences should end with a period." },
+    //
+    // Two live-bug guards baked into this pattern/replacement:
+    // 1. Trailing space: Outlook contenteditable extraction often yields a line ending in
+    //    a space ("It has to be done through "). The old "$1." capture included that space,
+    //    producing "It has to be done through ." — a period stranded after a space.
+    //    trimIssueWhitespace then stripped the space off `original` but left it embedded
+    //    before the period in `replacement`. The replacement function trims before appending.
+    // 2. Internal separator is [ \t], NOT \s: \s also matches \n, so the old pattern could
+    //    straddle a line break and treat two consecutive lines as one "sentence" (the [^…]
+    //    classes already exclude \n, but the single \s between them re-opened the door).
+    {
+      pattern: /^([A-Z][^.!?}\n"]*[ \t][^.!?}\n"]+)(?<![,:;])$/gm,
+      replacement: (m: string) => m.replace(/[ \t]+$/, "") + ".",
+      category: "punctuation",
+      rule: "missing_period",
+      explanation: "Sentences should end with a period.",
+    },
     // Double punctuation
     { pattern: /\.\./g, replacement: "...", category: "punctuation", rule: "double_period", explanation: "Use an ellipsis (...) not double periods." },
     // Missing comma after introductory/conditional clause
@@ -774,7 +790,8 @@ function trimIssueWhitespace(text: string, issue: GrammarIssue): GrammarIssue {
   let start = issue.startUtf16;
   let end = issue.endUtf16;
   let original = issue.original;
-  const replacement = issue.replacement.replace(/^\s+/, "").replace(/\s+$/, "");
+  let replacement = issue.replacement.replace(/^\s+/, "").replace(/\s+$/, "");
+  const hadTrailingWs = /\s$/.test(original);
   while (original.length > 0 && /^\s/.test(original)) {
     original = original.slice(1);
     start += 1;
@@ -782,6 +799,15 @@ function trimIssueWhitespace(text: string, issue: GrammarIssue): GrammarIssue {
   while (original.length > 0 && /\s$/.test(original)) {
     original = original.slice(0, -1);
     end -= 1;
+  }
+  // If original's trailing whitespace was trimmed but replacement still has that space
+  // stranded before a trailing punctuation mark (missing_period used to append "." after
+  // a captured trailing space → "word ." — trimming original left the space stuck before
+  // the period), pull it out so the pair stays in sync. No intentional rule produces
+  // "word ." as a final replacement (space_before_period collapses it away), so this is
+  // always a generation artifact, never a real fix.
+  if (hadTrailingWs && original !== issue.original && /[^\s]\s[.,;:!?]$/.test(replacement)) {
+    replacement = replacement.replace(/\s+([.,;:!?])$/, "$1");
   }
   // Safety net — if trimming somehow desynced start/end from the actual text (shouldn't
   // happen, since we only ever narrow from a span that was already validated), fall back to
