@@ -3,11 +3,14 @@ import { checkGrammar } from "./grammar.js";
 import type { VoiceProfile } from "@prosepilot/writing-core";
 
 // Same overall size convention used for direct text checks (services/api/src/routes/check.ts)
-// — a cumulative cap across all paragraphs rather than a fixed paragraph count, so a normal
-// document (which is the vast majority of real uploads) gets checked in FULL instead of
-// silently truncating after an arbitrary first N paragraphs, while an extreme outlier
-// document still has a sane upper bound.
-const MAX_DOCX_CHECK_CHARS = 100000;
+ // — a cumulative cap across all paragraphs rather than a fixed paragraph count, so a normal
+ // document (which is the vast majority of real uploads) gets checked in FULL instead of
+ // silently truncating after an arbitrary first N paragraphs, while an extreme outlier
+ // document still has a sane upper bound.
+ // Raised from 100k to 200k (2026-08-10) now that the two-pass tiered strategy bounds
+ // DeepSeek spend — pass 2 (full pipeline) only runs on paragraphs where pass 1 (rule engine
+ // + local model) found zero issues, so cost scales with how much actually needs deeper checking.
+ const MAX_DOCX_CHECK_CHARS = 200000;
 
 // Simple concurrency-limited map — checking every paragraph of a real document sequentially
 // (one at a time, each with its own network round-trips) would make a multi-page document

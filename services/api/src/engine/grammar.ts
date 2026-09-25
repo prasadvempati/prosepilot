@@ -639,6 +639,7 @@ SPECIFIC PATTERNS TO CHECK:
 - COULD OF/SHOULD OF/WOULD OF: phonetic misspellings of "could have"/"should have"/"would have" — "I could of gone"→"I could have gone" or "I could've gone".
 - REPEATED WORDS: accidental word repetition — "the the"→"the", "is is"→"is", "to to"→"to".
 - COMMA SPLICE: two independent clauses joined by just a comma (no conjunction) — "I went to the store, I bought milk"→"I went to the store and bought milk" or use a semicolon.
+- PARALLEL STRUCTURE IN LISTS: items in a list must use the same grammatical form — "requires typing, filing, and to answer phones"→"requires typing, filing, and answering phones" or "requires typing, filing, and answering phones"; "she likes reading, writing, and to jog"→"she likes reading, writing, and jogging". Flag mismatched verb forms (gerunds vs infinitives, base forms vs -ing).
 - DANGLING MODIFIER: a modifier that doesn't logically attach to the subject — "Walking to the store, the rain started" (who is walking?) → "Walking to the store, I got caught in the rain".
 - SQUINTING MODIFIER: a modifier placed between two things it could modify — "Students who study often get good grades" (study often? or often get?) → reposition for clarity.
 - MISSING SERIAL OXFORD COMMA: in a list of 3+ items, add comma before "and"/"or" — "red, white and blue"→"red, white, and blue".
@@ -646,6 +647,25 @@ SPECIFIC PATTERNS TO CHECK:
 - WHO VS WHOM: "who" for subjects, "whom" for objects — "Who did you call?"→"Whom did you call?"; "The person who I met"→"The person whom I met".
 - AMBIGUOUS ONLY PLACEMENT: "only" should be directly before the word it modifies — "I only eat vegetables"→"I eat only vegetables" (if that's the meaning).
 - WORD ORDER IN QUESTIONS: subject-auxiliary inversion — "You are coming?"→"Are you coming?"
+
+- FAULTY COMPARISONS: comparing unlike things — "The rent here is higher than the other building"→"The rent here is higher than that of the other building" or "than the other building's rent". Only flag when the compared elements are clearly mismatched.
+- INCOMPLETE COMPARISONS: "better than", "more than", "less than" without completing the comparison — "This option is better"→"This option is better than the alternative".
+- LIKE VS AS: "like" for noun comparisons, "as" for clause comparisons — "like I said"→"as I said"; "he runs like a cheetah" (correct, noun comparison).
+- FEWER VS LESS: "fewer" for countable nouns, "less" for uncountable — "less people"→"fewer people"; "fewer water"→"less water".
+- WHO VS THAT: "who" for people, "that" for things — "the person that called"→"the person who called".
+- REDUNDANT "THE REASON IS BECAUSE": "the reason is because"→"the reason is that" or "because".
+- BETWEEN VS AMONG: "between" for two, "among" for three+ — "between the three of us"→"among the three of us".
+- HYPHENATION IN COMPOUND ADJECTIVES: hyphenate before a noun — "a well known fact"→"a well-known fact"; "high quality work"→"high-quality work". Don't hyphenate after the noun ("the fact is well known").
+- POSSESSIVE APOSTROPHES: "the tenant's lease" (singular), "the tenants' lease" (plural) — not "the tenants lease" or "the tenant's lease's".
+- AFFECT VS EFFECT: "affect" is usually a verb (to influence), "effect" is usually a noun (result) — "the policy will effect change"→"affect change" (unless meaning "bring about"); "the affect of the policy"→"the effect of the policy".
+- COMPRISE VS COMPOSE: "comprise" = include/contain (whole comprises parts), "compose" = make up (parts compose whole) — "the team is comprised of"→"the team comprises" or "is composed of".
+- IMPLY VS INFER: "imply" = suggest (speaker), "infer" = deduce (listener) — "I infer from your tone" (correct if deducing); "your tone infers"→"your tone implies".
+- PRINCIPLE VS PRINCIPAL: "principle" = rule/fundamental truth, "principal" = main/head of school — "the principle reason"→"the principal reason".
+- STATIONARY VS STATIONERY: "stationary" = not moving, "stationery" = writing paper — "stationary bike" (correct); "office stationary"→"office stationery".
+- COMPLIMENT VS COMPLEMENT: "compliment" = praise, "complement" = complete/enhance — "the wine compliments the meal"→"complements the meal".
+- DISCRETE VS DISCREET: "discrete" = separate/distinct, "discreet" = prudent/careful — "discreet parts"→"discrete parts"; "be discrete about it"→"be discreet about it".
+- ELICIT VS ILLICIT: "elicit" = draw out, "illicit" = illegal — "elicit a response" (correct); "an elicit affair"→"an illicit affair".
+- ENSURE VS INSURE: "ensure" = make certain, "insure" = provide insurance — "insure compliance"→"ensure compliance".
 
 Be AGGRESSIVE about finding issues. Even small improvements count. Return issues for EVERY mistake you find, no matter how minor.
 
@@ -846,6 +866,32 @@ function mergeAllIssues(ruleIssues: GrammarIssue[], localModelIssues: GrammarIss
 
 // --- Rewrite Engine ---
 
+// DeepSeek call with extended timeout for rewrites (rewrite prompts are much larger:
+// tone descriptions, fact protection, glossary instruction, 3 alternatives + JSON)
+async function callDeepSeekForRewrite(messages: Array<{ role: string; content: string }>, model = "deepseek-chat"): Promise<string> {
+  const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.3,
+      max_tokens: 4096,
+    }),
+    signal: AbortSignal.timeout(60000), // 60s for rewrites (client also uses 60s)
+  });
+
+  if (!response.ok) {
+    throw new Error(`DeepSeek API error: ${response.status}`);
+  }
+
+  const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+  return data.choices?.[0]?.message?.content || "";
+}
+
 export async function rewriteText(request: RewriteRequest): Promise<RewriteResponse> {
   const startTime = Date.now();
   const { text, tone, customInstruction, length } = request;
@@ -929,7 +975,7 @@ Provide exactly 3 alternative rewrites, each with a slightly different approach:
 
 Each alternative must independently preserve all protected facts. All 3 must be valid rewrites of the same original text.`;
 
-  const rawResponse = await callDeepSeek([
+  const rawResponse = await callDeepSeekForRewrite([
     { role: "system", content: "You are a professional text rewriter. Return valid JSON only." },
     { role: "user", content: prompt },
   ]);

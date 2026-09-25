@@ -1,9 +1,9 @@
 const API_BASE = "https://prosepilot.io";
 
-// Kill switch: Rewrite is currently timing out in production (server-side, not yet root
-// caused) — hidden from view until it's actually fixed and verified. Flip back to true
-// once resolved; no other code needs to change.
-const REWRITE_FEATURE_ENABLED = false;
+// Kill switch: Rewrite was timing out in production (server-side DeepSeek timeout).
+// Fixed by adding 60s timeout wrapper in callDeepSeekForRewrite (services/api/src/engine/grammar.ts)
+// Flip back to true once resolved; no other code needs to change.
+const REWRITE_FEATURE_ENABLED = true;
 
 let currentIssues = [];
 let selectedText = "";
