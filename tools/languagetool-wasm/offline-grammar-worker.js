@@ -85,6 +85,79 @@ function flushWriteBuffer() {
   }).catch(() => {});
 }
 
+// === Utility: Create a skip mask for code blocks, URLs, emails, and technical terms ===
+function createSkipMask(text) {
+  const mask = new Array(text.length).fill(false);
+  
+  // 1. Code blocks (```...``` and `...`)
+  const codeBlockRegex = /```[\s\S]*?```|`[^`\n]+`/g;
+  let match;
+  while ((match = codeBlockRegex.exec(text)) !== null) {
+    for (let i = match.index; i < match.index + match[0].length; i++) {
+      mask[i] = true;
+    }
+  }
+  
+  // 2. URLs (http/https/www)
+  const urlRegex = /\b(?:https?:\/\/|www\.)[^\s<>"{}|\\^`\[\]]+/gi;
+  while ((match = urlRegex.exec(text)) !== null) {
+    for (let i = match.index; i < match.index + match[0].length; i++) {
+      mask[i] = true;
+    }
+  }
+  
+  // 3. Emails
+  const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+  while ((match = emailRegex.exec(text)) !== null) {
+    for (let i = match.index; i < match.index + match[0].length; i++) {
+      mask[i] = true;
+    }
+  }
+  
+  // 4. Technical terms / common acronyms (don't flag as spelling errors)
+  const techTerms = [
+    'API', 'JSON', 'HTTP', 'HTTPS', 'SQL', 'CSS', 'JS', 'HTML', 'XML', 'YAML',
+    'REST', 'GraphQL', 'OAuth', 'JWT', 'API', 'SDK', 'CLI', 'GUI', 'UI', 'UX',
+    'CRUD', 'MVC', 'MVP', 'MVVM', 'ORM', 'DB', 'SQL', 'NoSQL', 'Redis', 'MongoDB',
+    'PostgreSQL', 'MySQL', 'Docker', 'Kubernetes', 'AWS', 'GCP', 'Azure',
+    'Git', 'GitHub', 'GitLab', 'npm', 'yarn', 'pnpm', 'Node', 'TypeScript',
+    'JavaScript', 'Python', 'React', 'Vue', 'Angular', 'Next.js', 'Vite',
+    'ESLint', 'Prettier', 'Webpack', 'Rollup', 'Vercel', 'Netlify',
+    'AI', 'ML', 'LLM', 'GPT', 'BERT', 'CNN', 'RNN', 'GPU', 'CPU', 'RAM',
+    'SSD', 'HDD', 'LAN', 'WAN', 'VPN', 'DNS', 'IP', 'TCP', 'UDP', 'SSL', 'TLS',
+    'SHA', 'AES', 'RSA', 'ECDSA', 'JWT', 'OAuth2', 'OpenID', 'SAML',
+    'CI', 'CD', 'PR', 'MR', 'LGTM', 'WIP', 'TODO', 'FIXME', 'HACK', 'NOTE'
+  ];
+  
+  for (const term of techTerms) {
+    const regex = new RegExp(`\\b${term}\\b`, 'gi');
+    while ((match = regex.exec(text)) !== null) {
+      for (let i = match.index; i < match.index + match[0].length; i++) {
+        mask[i] = true;
+      }
+    }
+  }
+  
+  // 4. File paths (Windows and Unix)
+  const pathRegex = /(?:[A-Za-z]:[\\/]|[\\/])(?:[^\\/\s<>:"|?*\x00-\x1F]+[\\/])*[^\\/\s<>:"|?*\x00-\x1F]*/g;
+  while ((match = pathRegex.exec(text)) !== null) {
+    if (match[0].length > 3) { // Only mask reasonably long paths
+      for (let i = match.index; i < match.index + match[0].length; i++) {
+        mask[i] = true;
+      }
+    }
+  }
+  
+  return mask;
+}
+
+function shouldSkipPosition(mask, start, end) {
+  for (let i = start; i < end && i < mask.length; i++) {
+    if (mask[i]) return true;
+  }
+  return false;
+}
+
 const CONTRACTIONS = [
   { wrong: "dont", right: "don't" },
   { wrong: "cant", right: "can't" },
@@ -177,12 +250,13 @@ function applyContractionCase(matched, canonical) {
   return canonical;
 }
 
-function checkContractions(text) {
+function checkContractions(text, skipMask) {
   const issues = [];
   for (const { wrong, right } of CONTRACTIONS) {
     const regex = new RegExp(`\\b${wrong}\\b`, "gi");
     let match;
     while ((match = regex.exec(text)) !== null) {
+      if (shouldSkipPosition(skipMask, match.index, match.index + match[0].length)) continue;
       issues.push({
         id: `contraction_${Math.random().toString(36).slice(2, 10)}`,
         category: "grammar",
@@ -203,12 +277,13 @@ function checkContractions(text) {
   return issues;
 }
 
-function checkUncountable(text) {
+function checkUncountable(text, skipMask) {
   const issues = [];
   for (const [wrong, right] of Object.entries(UNCOUNTABLE)) {
     const regex = new RegExp(`\\b${wrong}\\b`, "gi");
     let match;
     while ((match = regex.exec(text)) !== null) {
+      if (shouldSkipPosition(skipMask, match.index, match.index + match[0].length)) continue;
       issues.push({
         id: `uncount_${Math.random().toString(36).slice(2, 10)}`,
         category: "grammar",
@@ -229,12 +304,13 @@ function checkUncountable(text) {
   return issues;
 }
 
-function checkProperNouns(text) {
+function checkProperNouns(text, skipMask) {
   const issues = [];
   for (const [wrong, right] of Object.entries(PROPER_NOUNS)) {
     const regex = new RegExp(`\\b${wrong}\\b`, "gi");
     let match;
     while ((match = regex.exec(text)) !== null) {
+      if (shouldSkipPosition(skipMask, match.index, match.index + match[0].length)) continue;
       issues.push({
         id: `proper_${Math.random().toString(36).slice(2, 10)}`,
         category: "spelling",
@@ -255,12 +331,13 @@ function checkProperNouns(text) {
   return issues;
 }
 
-function checkAdjectiveNoun(text) {
+function checkAdjectiveNoun(text, skipMask) {
   const issues = [];
   for (const [wrong, right] of Object.entries(ADJECTIVE_NOUN)) {
     const regex = new RegExp(`\\b${wrong.replace(/\s+/g, "\\s+")}\\b`, "gi");
     let match;
     while ((match = regex.exec(text)) !== null) {
+      if (shouldSkipPosition(skipMask, match.index, match.index + match[0].length)) continue;
       issues.push({
         id: `adj_noun_${Math.random().toString(36).slice(2, 10)}`,
         category: "style",
@@ -281,12 +358,13 @@ function checkAdjectiveNoun(text) {
   return issues;
 }
 
-function checkGerundToNoun(text) {
+function checkGerundToNoun(text, skipMask) {
   const issues = [];
   for (const { pattern, replacement } of GERUND_TO_NOUN) {
     let match;
     pattern.lastIndex = 0;
     while ((match = pattern.exec(text)) !== null) {
+      if (shouldSkipPosition(skipMask, match.index, match.index + match[0].length)) continue;
       issues.push({
         id: `gerund_${Math.random().toString(36).slice(2, 10)}`,
         category: "grammar",
@@ -307,7 +385,7 @@ function checkGerundToNoun(text) {
   return issues;
 }
 
-function checkCapitalization(text) {
+function checkCapitalization(text, skipMask) {
   const issues = [];
   const sentences = text.split(/([.!?]\s+)/);
   let offset = 0;
@@ -324,40 +402,49 @@ function checkCapitalization(text) {
     const sentenceStart = offset + leadingSpace;
     
     if (/^[a-z]/.test(trimmed)) {
-      const firstChar = trimmed[0];
-      issues.push({
-        id: `cap_${Math.random().toString(36).slice(2, 10)}`,
-        category: "grammar",
-        rule: "capitalize_sentence_start",
-        startUtf16: sentenceStart,
-        endUtf16: sentenceStart + 1,
-        original: firstChar,
-        replacement: firstChar.toUpperCase(),
-        confidence: 0.95,
-        safeAuto: true,
-        severity: "info",
-        explanation: "Capitalize the first word of a sentence",
-        sourceHash: getCacheKey(text),
-        source: "offline-grammar",
-      });
+      if (shouldSkipPosition(skipMask, sentenceStart, sentenceStart + 1)) {
+        // skip
+      } else {
+        const firstChar = trimmed[0];
+        issues.push({
+          id: `cap_${Math.random().toString(36).slice(2, 10)}`,
+          category: "grammar",
+          rule: "capitalize_sentence_start",
+          startUtf16: sentenceStart,
+          endUtf16: sentenceStart + 1,
+          original: firstChar,
+          replacement: firstChar.toUpperCase(),
+          confidence: 0.95,
+          safeAuto: true,
+          severity: "info",
+          explanation: "Capitalize the first word of a sentence",
+          sourceHash: getCacheKey(text),
+          source: "offline-grammar",
+        });
+      }
     }
     
     if (!/[.!?]$/.test(trimmed) && trimmed.length > 3) {
-      issues.push({
-        id: `punct_${Math.random().toString(36).slice(2, 10)}`,
-        category: "punctuation",
-        rule: "missing_period",
-        startUtf16: sentenceStart + trimmed.length - 1,
-        endUtf16: sentenceStart + trimmed.length,
-        original: trimmed.slice(-1),
-        replacement: trimmed.slice(-1) + ".",
-        confidence: 0.75,
-        safeAuto: true,
-        severity: "info",
-        explanation: "Sentence appears to be missing ending punctuation",
-        sourceHash: getCacheKey(text),
-        source: "offline-grammar",
-      });
+      const periodPos = sentenceStart + trimmed.length - 1;
+      if (shouldSkipPosition(skipMask, periodPos, periodPos + 1)) {
+        // skip
+      } else {
+        issues.push({
+          id: `punct_${Math.random().toString(36).slice(2, 10)}`,
+          category: "punctuation",
+          rule: "missing_period",
+          startUtf16: periodPos,
+          endUtf16: periodPos + 1,
+          original: trimmed.slice(-1),
+          replacement: trimmed.slice(-1) + ".",
+          confidence: 0.75,
+          safeAuto: true,
+          severity: "info",
+          explanation: "Sentence appears to be missing ending punctuation",
+          sourceHash: getCacheKey(text),
+          source: "offline-grammar",
+        });
+      }
     }
     
     offset += sentence.length + (sentences[i + 1]?.length || 0);
@@ -367,12 +454,13 @@ function checkCapitalization(text) {
 }
 
 // === Common confusion patterns (your/you're, their/there/they're, etc.) ===
-function checkConfusionPatterns(text) {
+function checkConfusionPatterns(text, skipMask) {
   const issues = [];
   for (const { pattern, replacement, category, rule, explanation } of CONFUSION_PATTERNS) {
     let match;
     pattern.lastIndex = 0;
     while ((match = pattern.exec(text)) !== null) {
+      if (shouldSkipPosition(skipMask, match.index, match.index + match[0].length)) continue;
       let fixed;
       if (typeof replacement === "function") {
         fixed = match[0].replace(pattern, replacement);
@@ -403,12 +491,13 @@ function checkConfusionPatterns(text) {
 }
 
 // === Missing auxiliary verbs (passive constructions) ===
-function checkMissingAuxiliaries(text) {
+function checkMissingAuxiliaries(text, skipMask) {
   const issues = [];
   for (const { pattern, replacement, category, rule, explanation } of AUXILIARY_PATTERNS) {
     let match;
     pattern.lastIndex = 0;
     while ((match = pattern.exec(text)) !== null) {
+      if (shouldSkipPosition(skipMask, match.index, match.index + match[0].length)) continue;
       const fixed = match[0].replace(pattern, replacement);
       if (fixed && fixed !== match[0]) {
         issues.push({
@@ -433,11 +522,12 @@ function checkMissingAuxiliaries(text) {
 }
 
 // === Run-on sentences / comma splices ===
-function checkRunOnSentences(text) {
+function checkRunOnSentences(text, skipMask) {
   const issues = [];
   const regex = /\b([A-Z][^.!?]*\b(?:I|we|you|he|she|it|they|the\s+\w+|a\s+\w+)\s+\w+[^.!?]*),\s+(I|we|you|he|she|it|they|the\s+\w+|a\s+\w+)\s+\w+[^.!?]*([.!?])/g;
   let match;
   while ((match = regex.exec(text)) !== null) {
+    if (shouldSkipPosition(skipMask, match.index, match.index + match[0].length)) continue;
     const afterComma = text.substring(match.index + match[0].indexOf(',') + 1, match.index + match[0].indexOf(',') + 20);
     if (!/^\s*(and|but|or|so|yet|for|nor)\b/i.test(afterComma)) {
       issues.push({
@@ -461,11 +551,12 @@ function checkRunOnSentences(text) {
 }
 
 // === Parallel structure ===
-function checkParallelStructure(text) {
+function checkParallelStructure(text, skipMask) {
   const issues = [];
   const regex = /\b(to\s+\w+|ing\s+\w+|\w+\s+ing)\s+and\s+(to\s+\w+|\w+)\b/gi;
   let match;
   while ((match = regex.exec(text)) !== null) {
+    if (shouldSkipPosition(skipMask, match.index, match.index + match[0].length)) continue;
     const parts = match[0].split(/\s+and\s+/);
     if (parts.length === 2) {
       const first = parts[0].trim();
@@ -498,7 +589,7 @@ function checkParallelStructure(text) {
 }
 
 // === Subject-verb agreement for complex subjects ===
-function checkSubjectVerbAgreement(text) {
+function checkSubjectVerbAgreement(text, skipMask) {
   const issues = [];
   const patterns = [
     { pattern: /\b(each|every|either|neither)\s+of\s+the\s+\w+\s+(are|were|have|has|do|does)\b/gi, replacement: (m) => m.replace(/\b(are|were)\b/gi, "is").replace(/\b(have)\b/gi, "has").replace(/\b(do)\b/gi, "does"), explanation: "'Each/every/either/neither of the X' takes singular verb." },
@@ -510,6 +601,7 @@ function checkSubjectVerbAgreement(text) {
     let match;
     pattern.lastIndex = 0;
     while ((match = pattern.exec(text)) !== null) {
+      if (shouldSkipPosition(skipMask, match.index, match.index + match[0].length)) continue;
       const fixed = match[0].replace(pattern, replacement);
       if (fixed && fixed !== match[0]) {
         issues.push({
@@ -533,11 +625,12 @@ function checkSubjectVerbAgreement(text) {
   return issues;
 }
 
-function checkRepeatedWords(text) {
+function checkRepeatedWords(text, skipMask) {
   const issues = [];
   const regex = /\b(the|a|an|is|are|was|were|have|has|had|do|does|did|can|could|will|would|shall|should|may|might|must)\s+\1\b/gi;
   let match;
   while ((match = regex.exec(text)) !== null) {
+    if (shouldSkipPosition(skipMask, match.index, match.index + match[0].length)) continue;
     issues.push({
       id: `repeat_${Math.random().toString(36).slice(2, 10)}`,
       category: "grammar",
@@ -563,20 +656,22 @@ async function checkGrammar(text) {
     return { issues: cached, cached: true, source: "offline-cache" };
   }
   
+  const skipMask = createSkipMask(text);
+  
   const allIssues = [
-    ...checkContractions(text),
-    ...checkUncountable(text),
-    ...checkProperNouns(text),
-    ...checkAdjectiveNoun(text),
-    ...checkGerundToNoun(text),
-    ...checkCapitalization(text),
-    ...checkRepeatedWords(text),
+    ...checkContractions(text, skipMask),
+    ...checkUncountable(text, skipMask),
+    ...checkProperNouns(text, skipMask),
+    ...checkAdjectiveNoun(text, skipMask),
+    ...checkGerundToNoun(text, skipMask),
+    ...checkCapitalization(text, skipMask),
+    ...checkRepeatedWords(text, skipMask),
     // NEW checks
-    ...checkConfusionPatterns(text),
-    ...checkMissingAuxiliaries(text),
-    ...checkRunOnSentences(text),
-    ...checkParallelStructure(text),
-    ...checkSubjectVerbAgreement(text),
+    ...checkConfusionPatterns(text, skipMask),
+    ...checkMissingAuxiliaries(text, skipMask),
+    ...checkRunOnSentences(text, skipMask),
+    ...checkParallelStructure(text, skipMask),
+    ...checkSubjectVerbAgreement(text, skipMask),
   ];
   
   await setCached(text, allIssues);

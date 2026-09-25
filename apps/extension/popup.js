@@ -72,6 +72,132 @@ document.addEventListener("DOMContentLoaded", async () => {
   const rewriteTone = document.getElementById("rewriteTone");
   const rewritePreview = document.getElementById("rewritePreview");
 
+  // Settings panel elements
+  const settingsPanel = document.getElementById("settingsPanel");
+  const closeSettingsBtn = document.getElementById("closeSettingsBtn");
+  const addIgnoredWordBtn = document.getElementById("addIgnoredWordBtn");
+  const newIgnoredWordInput = document.getElementById("newIgnoredWordInput");
+  const saveIgnoredWordBtn = document.getElementById("saveIgnoredWordBtn");
+  const cancelIgnoredWordBtn = document.getElementById("cancelIgnoredWordBtn");
+  const ignoredWordsList = document.getElementById("ignoredWordsList");
+  const addIgnoredWordForm = document.getElementById("addIgnoredWordForm");
+  const reportIssueBtn = document.getElementById("reportIssueBtn");
+  const privacyPolicyLink = document.getElementById("privacyPolicyLink");
+
+  // Load ignored words
+  async function loadIgnoredWords() {
+    const { prosepilot_ignored_words } = await chrome.storage.local.get("prosepilot_ignored_words");
+    return prosepilot_ignored_words || [];
+  }
+
+  // Render ignored words list
+  async function renderIgnoredWords() {
+    const words = await loadIgnoredWords();
+    if (words.length === 0) {
+      ignoredWordsList.innerHTML = '<div class="empty-ignored">No ignored words yet. Click + Add to add one.</div>';
+      return;
+    }
+    ignoredWordsList.innerHTML = words.map(word => `
+      <div class="ignored-word-item">
+        <span class="ignored-word-text">${escapeHtml(word)}</span>
+        <button class="ignored-word-delete" data-word="${escapeHtml(word)}" title="Remove">&times;</button>
+      </div>
+    `).join("");
+
+    // Add delete handlers
+    ignoredWordsList.querySelectorAll(".ignored-word-delete").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const word = btn.dataset.word;
+        const words = await loadIgnoredWords();
+        const filtered = words.filter(w => w !== word);
+        await chrome.storage.local.set({ prosepilot_ignored_words: filtered });
+        renderIgnoredWords();
+        // Notify content scripts to update their ignored words
+        const tabs = await chrome.tabs.query({});
+        for (const tab of tabs) {
+          try {
+            chrome.tabs.sendMessage(tab.id, { action: "updateIgnoredWords", words: filtered });
+          } catch (e) { /* tab may not have content script */ }
+        }
+      });
+    });
+  }
+
+  // Settings panel toggle
+  settingsBtn.addEventListener("click", async () => {
+    const isVisible = settingsPanel.style.display !== "none";
+    settingsPanel.style.display = isVisible ? "none" : "block";
+    if (!isVisible) {
+      await renderIgnoredWords();
+      addIgnoredWordForm.style.display = "none";
+      addIgnoredWordInput.value = "";
+    }
+  });
+
+  closeSettingsBtn.addEventListener("click", () => {
+    settingsPanel.style.display = "none";
+  });
+
+  // Add ignored word flow
+  addIgnoredWordBtn.addEventListener("click", () => {
+    addIgnoredWordBtn.style.display = "none";
+    addIgnoredWordForm.style.display = "flex";
+    newIgnoredWordInput.focus();
+  });
+
+  cancelIgnoredWordBtn.addEventListener("click", () => {
+    addIgnoredWordBtn.style.display = "block";
+    addIgnoredWordForm.style.display = "none";
+    newIgnoredWordInput.value = "";
+  });
+
+  saveIgnoredWordBtn.addEventListener("click", async () => {
+    const word = newIgnoredWordInput.value.trim().toLowerCase();
+    if (!word) return;
+    const words = await loadIgnoredWords();
+    if (!words.includes(word)) {
+      words.push(word);
+      await chrome.storage.local.set({ prosepilot_ignored_words: words });
+      renderIgnoredWords();
+      // Notify content scripts
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        try {
+          chrome.tabs.sendMessage(tab.id, { action: "updateIgnoredWords", words });
+        } catch (e) { /* tab may not have content script */ }
+      }
+    }
+    addIgnoredWordBtn.style.display = "block";
+    addIgnoredWordForm.style.display = "none";
+    newIgnoredWordInput.value = "";
+  });
+
+  newIgnoredWordInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") saveIgnoredWordBtn.click();
+    if (e.key === "Escape") cancelIgnoredWordBtn.click();
+  });
+
+  // Report issue button
+  reportIssueBtn.addEventListener("click", () => {
+    const issue = currentIssues.find(i => i.status === "pending");
+    if (!issue) {
+      status.textContent = "No pending issues to report";
+      status.className = "status info";
+      return;
+    }
+    // Open a pre-filled GitHub issue or email
+    const body = `**Issue Type:** Incorrect suggestion\n\n**Original:** \`${issue.original}\`\n**Suggested:** \`${issue.replacement}\`\n**Rule:** ${issue.rule}\n**Category:** ${issue.category}\n\n**Context:** ${issue.explanation}`;
+    const url = `https://github.com/prasadvempati/prosepilot/issues/new?title=${encodeURIComponent("Incorrect suggestion: " + issue.original)}&body=${encodeURIComponent(body)}`;
+    chrome.tabs.create({ url });
+  });
+
+  // Privacy policy link - open in new tab
+  privacyPolicyLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: "https://prosepilot.io/privacy.html" });
+  });
+
   if (!REWRITE_FEATURE_ENABLED && rewriteSection) {
     rewriteSection.style.display = "none";
   }
