@@ -2420,6 +2420,15 @@ if (!window.__prosepilot_bridge_installed) {
     injectStyles();
     await loadMode();
     await loadIgnoredWords();
+    
+    // Check if onboarding is complete
+    const { prosepilot_onboarding_complete } = await chrome.storage.local.get("prosepilot_onboarding_complete");
+    if (!prosepilot_onboarding_complete) {
+      // First install — open onboarding page
+      chrome.runtime.sendMessage({ action: 'openOnboarding' });
+      // Still initialize so extension works if user closes onboarding
+    }
+    
     await initOfflineWorker();
 
     // Load cached Clerk token from storage

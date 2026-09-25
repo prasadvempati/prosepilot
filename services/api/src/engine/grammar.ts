@@ -335,6 +335,27 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     { pattern: /\bweve\b/gi, replacement: (m: string) => applyContractionCase(m, "we've"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"we've\"." },
     { pattern: /\bwhats\b/gi, replacement: (m: string) => applyContractionCase(m, "what's"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"what's\"." },
     { pattern: /\bthats\b/gi, replacement: (m: string) => applyContractionCase(m, "that's"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"that's\"." },
+
+    // === COMMONLY CONFUSED WORDS (rule-based, for rulesOnly mode) ===
+    // these/they're
+    { pattern: /\btheir\s+(going|here|there)\b/gi, replacement: "they're $1", category: "grammar", rule: "confused_word", explanation: "Use 'they're' (they are), not 'their' (possessive)." },
+    { pattern: /\bthere\s+(is|are|was|were|goes|come)\b/gi, replacement: "they're $1", category: "grammar", rule: "confused_word", explanation: "Likely 'they're' (they are), not 'there' (location)." },
+    // your/you're
+    { pattern: /\byour\s+(going|here|there|welcome|right|sure)\b/gi, replacement: "you're $1", category: "grammar", rule: "confused_word", explanation: "Use 'you're' (you are), not 'your' (possessive)." },
+    // its/it's
+    { pattern: /\bits\s+(a|an|the|going|time|been|good|bad|hard|easy|important|possible|likely|unlikely)\b/gi, replacement: "it's $1", category: "grammar", rule: "confused_word", explanation: "Use 'it's' (it is), not 'its' (possessive)." },
+    // who's/whose
+    { pattern: /\bwho's\s+(car|house|book|phone|idea|fault|turn|responsibility)\b/gi, replacement: "whose $1", category: "grammar", rule: "confused_word", explanation: "Use 'whose' (possessive), not 'who's' (who is)." },
+    // then/than
+    { pattern: /\bthen\s+(is|are|was|were|has|have|had|does|did|can|could|will|would|should|may|might|must)\b/gi, replacement: "than $1", category: "grammar", rule: "confused_word", explanation: "Use 'than' for comparisons, not 'then' (time)." },
+    { pattern: /\b(?:more|less|better|worse|greater|fewer|older|younger|faster|slower)\s+then\b/gi, replacement: (m: string) => m.replace(/\bthen\b/gi, "than"), category: "grammar", rule: "confused_word", explanation: "Use 'than' for comparisons, not 'then' (time)." },
+    // could of/should of/would of
+    { pattern: /\b(could|should|would|must|might)\s+of\b/gi, replacement: (m: string) => m.replace(/\bof\b/gi, "have"), category: "grammar", rule: "could_of", explanation: "Use 'have', not 'of' (e.g., 'could have', not 'could of')." },
+    { pattern: /\bshould\s+of\b/gi, replacement: "should have", category: "grammar", rule: "should_of", explanation: "Use 'should have' not 'should of'." },
+    { pattern: /\bwould\s+of\b/gi, replacement: "would have", category: "grammar", rule: "would_of", explanation: "Use 'would have' not 'would of'." },
+    { pattern: /\bmight\s+of\b/gi, replacement: "might have", category: "grammar", rule: "might_of", explanation: "Use 'might have' not 'might of'." },
+    { pattern: /\bmust\s+of\b/gi, replacement: "must have", category: "grammar", rule: "must_of", explanation: "Use 'must have' not 'must of'." },
+
   ];
 
   for (const rule of rules) {

@@ -112,6 +112,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "openOnboarding") {
+    chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") });
+    sendResponse({ success: true });
+    return true;
+  }
+
+  if (message.action === "completeOnboarding") {
+    chrome.storage.local.set({ prosepilot_onboarding_complete: true });
+    sendResponse({ success: true });
+    return true;
+  }
+
   // Unknown message — respond to prevent "receiving end does not exist" errors
   sendResponse({ error: "Unknown action: " + (message.action || "none") });
   return false;

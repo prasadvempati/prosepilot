@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      width: 420px; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+      background: #fafafa;
+    }
+    .slide { 
+      display: none; 
+      padding: 32px 24px; 
+      text-align: center;
+      animation: fadeIn 0.3s ease;
+    }
+    .slide.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    
+    .logo { 
+      width: 56px; height: 56px; 
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); 
+      border-radius: 16px; 
+      display: flex; align-items: center; justify-content: center; 
+      margin: 0 auto 20px;
+    }
+    .logo svg { width: 28px; height: 28px; color: white; }
+    
+    h1 { font-size: 24px; font-weight: 700; color: #111827; margin-bottom: 8px; line-height: 1.3; }
+    .subtitle { font-size: 15px; color: #6b7280; margin-bottom: 32px; line-height: 1.5; }
+    
+    .demo-area { 
+      background: white; 
+      border: 1px solid #e5e7eb; 
+      border-radius: 12px; 
+      padding: 20px; 
+      margin: 20px 0;
+      text-align: left;
+    }
+    .demo-label { font-size: 12px; font-weight: 600; color: #6366f1; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+    .demo-text { 
+      font-size: 14px; 
+      line-height: 1.6; 
+      color: #374151; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .demo-text .issue { 
+      background: #fef3c7; 
+      border-radius: 3px; 
+      padding: 1px 4px; 
+      text-decoration: underline; 
+      text-decoration-color: #f59e0b;
+      text-underline-offset: 2px;
+    }
+    .demo-text .fixed { 
+      background: #dcfce7; 
+      border-radius: 3px; 
+      padding: 1px 4px; 
+      color: #166534;
+      font-weight: 500;
+    }
+    
+    .feature-grid { 
+      display: grid; 
+      grid-template-columns: repeat(3, 1fr); 
+      gap: 12px; 
+      margin: 24px 0; 
+    }
+    .feature { 
+      background: white; 
+      border: 1px solid #e5e7eb; 
+      border-radius: 10px; 
+      padding: 16px 12px; 
+      text-align: center;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .feature:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(99,102,241,0.15); }
+    .feature-icon { 
+      width: 40px; height: 40px; 
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); 
+      border-radius: 10px; 
+      display: flex; align-items: center; justify-content: center; 
+      margin: 0 auto 10px; 
+    }
+    .feature-icon svg { width: 20px; height: 20px; color: white; }
+    .feature-title { font-size: 13px; font-weight: 600; color: #111827; margin-bottom: 4px; }
+    .feature-desc { font-size: 11px; color: #6b7280; line-height: 1.4; }
+    
+    .progress-bar { 
+      height: 4px; 
+      background: #e5e7eb; 
+      border-radius: 2px; 
+      margin: 24px 0 16px; 
+      overflow: hidden;
+    }
+    .progress-fill { 
+      height: 100%; 
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); 
+      border-radius: 2px; 
+      transition: width 0.4s ease; 
+    }
+    .step-indicator { font-size: 13px; color: #9ca3af; }
+    
+    .btn { 
+      width: 100%; 
+      padding: 14px; 
+      border: none; 
+      border-radius: 10px; 
+      font-size: 15px; 
+      font-weight: 600; 
+      cursor: pointer; 
+      transition: all 0.2s;
+      margin-top: 8px;
+    }
+    .btn-primary { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; }
+    .btn-primary:hover { filter: brightness(1.05); transform: translateY(-1px); }
+    .btn-secondary { background: #f3f4f6; color: #374151; }
+    .btn-secondary:hover { background: #e5e7eb; }
+    
+    .skip-link { 
+      display: block; 
+      text-align: center; 
+      margin-top: 16px; 
+      font-size: 13px; 
+      color: #9ca3af; 
+      text-decoration: none; 
+    }
+    .skip-link:hover { color: #6b7280; }
+    
+    .voice-score-demo { 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      gap: 16px; 
+      margin: 16px 0; 
+      padding: 16px; 
+      background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); 
+      border: 1px solid #bbf7d0; 
+      border-radius: 10px; 
+    }
+    .voice-badge { 
+      width: 60px; height: 60px; 
+      border-radius: 50%; 
+      background: linear-gradient(135deg, #059669 0%, #10b981 100%); 
+      display: flex; align-items: center; justify-content: center; 
+      color: white; font-weight: 700; font-size: 20px; 
+      flex-shrink: 0;
+    }
+    .voice-info h4 { font-size: 14px; font-weight: 600; color: #065f46; margin-bottom: 4px; }
+    .voice-info p { font-size: 12px; color: #166534; }
+  </style>
+</head>
+<body>
+  <!-- Slide 1: Welcome -->
+  <div class="slide active" data-slide="1">
+    <div class="logo">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+    </div>
+    <h1>Write like you.<br>Only better.</h1>
+    <p class="subtitle">ProsePilot fixes grammar, spelling, and punctuation — without changing your voice. Grammarly rewrites; we refine.</p>
+    
+    <div class="voice-score-demo">
+      <div class="voice-badge">94</div>
+      <div class="voice-info">
+        <h4>Voice Preservation: 94%</h4>
+        <p>Grammarly would change ~40% of your style. We keep you sounding like you.</p>
+      </div>
+    </div>
+    
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="feature-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+        </div>
+        <div class="feature-title">Grammar & Spelling</div>
+        <div class="feature-desc">Catches typos, punctuation, and grammar errors instantly</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+        </div>
+        <div class="feature-title">Lightning Fast</div>
+        <div class="feature-desc">Offline engine runs in your browser — no waiting</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+        </div>
+        <div class="feature-title">Your Voice Kept</div>
+        <div class="feature-desc">Voice Preservation Score shows how much of you stays intact</div>
+      </div>
+    </div>
+    
+    <div class="progress-bar"><div class="progress-fill" style="width: 25%"></div></div>
+    <div class="step-indicator">Step 1 of 4</div>
+    <button class="btn btn-primary" onclick="nextSlide()">Get Started</button>
+    <a href="#" class="skip-link" onclick="finishOnboarding()">Skip & Open Extension</a>
+  </div>
+
+  <!-- Slide 2: Live Demo -->
+  <div class="slide" data-slide="2">
+    <div class="logo">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+    </div>
+    <h1>See it in action</h1>
+    <p class="subtitle">Type below and watch ProsePilot catch errors in real-time — offline, instantly.</p>
+    
+    <div class="demo-area">
+      <div class="demo-label">Try typing this (with errors):</div>
+      <div class="demo-text" id="demoInput" contenteditable="true" spellcheck="false" style="min-height: 60px; outline: none; padding: 8px; background: #f9fafb; border-radius: 6px;">your going to love this. its a great day. could of done better.</div>
+    </div>
+    
+    <div class="demo-area" style="display: none;" id="demoOutput">
+      <div class="demo-label">ProsePilot caught:</div>
+      <div class="demo-text" id="fixedText"></div>
+    </div>
+    
+    <div class="progress-bar"><div class="progress-fill" style="width: 50%"></div></div>
+    <div class="step-indicator">Step 2 of 4</div>
+    <button class="btn btn-primary" onclick="nextSlide()">Next</button>
+    <a href="#" class="skip-link" onclick="finishOnboarding()">Skip</a>
+  </div>
+
+  <!-- Slide 3: Voice Preservation -->
+  <div class="slide" data-slide="3">
+    <div class="logo">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+    </div>
+    <h1>Your voice, preserved</h1>
+    <p class="subtitle">Every suggestion comes with a Voice Preservation Score. See exactly what changes — and what stays yours.</p>
+    
+    <div class="voice-score-demo">
+      <div class="voice-badge">94</div>
+      <div class="voice-info">
+        <h4>ProsePilot: 94% preserved</h4>
+        <p>Only fixes grammar. Your style stays intact.</p>
+      </div>
+    </div>
+    
+    <div class="voice-score-demo" style="background: linear-gradient(135deg, #fef2f2 0%, #fef2f2 100%); border-color: #fecaca;">
+      <div class="voice-badge" style="background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);">58</div>
+      <div class="voice-info">
+        <h4>Grammarly: ~58% preserved</h4>
+        <p>Rewrites sentences to their "preferred" style.</p>
+      </div>
+    </div>
+    
+    <p style="font-size: 13px; color: #6b7280; margin-top: 16px;">
+      <strong>Factors tracked:</strong> Contractions added, passive→active, vocabulary swaps, sentence restructuring, formality shifts
+    </p>
+    
+    <div class="progress-bar"><div class="progress-fill" style="width: 75%"></div></div>
+    <div class="step-indicator">Step 3 of 4</div>
+    <button class="btn btn-primary" onclick="nextSlide()">Next</button>
+    <a href="#" class="skip-link" onclick="finishOnboarding()">Skip</a>
+  </div>
+
+  <!-- Slide 4: Ready -->
+  <div class="slide" data-slide="4">
+    <div class="logo">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+    </div>
+    <h1>You're ready</h1>
+    <p class="subtitle">ProsePilot works everywhere you write — Gmail, LinkedIn, Notion, Google Docs, and more.</p>
+    
+    <div class="feature-grid">
+      <div class="feature" style="background: #f0fdf4; border-color: #bbf7d0;">
+        <div class="feature-icon" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%);">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+        </div>
+        <div class="feature-title">Works Everywhere</div>
+        <div class="feature-desc">Gmail, LinkedIn, Docs, Notion, Slack, Twitter...</div>
+      </div>
+      <div class="feature" style="background: #eff6ff; border-color: #bfdbfe;">
+        <div class="feature-icon" style="background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+        </div>
+        <div class="feature-title">Private & Secure</div>
+        <div class="feature-desc">Your text never leaves your device (offline mode)</div>
+      </div>
+      <div class="feature" style="background: #faf5ff; border-color: #e9d5ff;">
+        <div class="feature-icon" style="background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+        </div>
+        <div class="feature-title">Free to Start</div>
+        <div class="feature-desc">Core grammar free. Pro features from $9/mo.</div>
+      </div>
+    </div>
+    
+    <div class="progress-bar"><div class="progress-fill" style="width: 100%"></div></div>
+    <div class="step-indicator">Step 4 of 4</div>
+    <button class="btn btn-primary" onclick="finishOnboarding()">Start Writing</button>
+  </div>
+
+  <script>
+    let currentSlide = 1;
+    const totalSlides = 4;
+    const demoInput = document.getElementById('demoInput');
+    const demoOutput = document.getElementById('demoOutput');
+    const fixedText = document.getElementById('fixedText');
+    let demoWorker = null;
+
+    function initDemoWorker() {
+      try {
+        demoWorker = new Worker(chrome.runtime.getURL('lib/offline-grammar-worker.js'));
+        demoWorker.onmessage = (e) => {
+          const { issues } = e.data;
+          if (issues && issues.length > 0) {
+            applyFixesToDemo(issues);
+          }
+        };
+      } catch (e) {
+        console.log('Demo worker unavailable');
+      }
+    }
+
+    function applyFixesToDemo(issues) {
+      let text = demoInput.textContent;
+      // Sort by position descending so replacements don't shift offsets
+      issues.sort((a, b) => b.startUtf16 - a.startUtf16);
+      
+      for (const issue of issues) {
+        if (issue.replacement && issue.replacement !== issue.original) {
+          const before = text.substring(0, issue.startUtf16);
+          const after = text.substring(issue.endUtf16);
+          text = before + '<span class="fixed">' + issue.replacement + '</span>' + after;
+        }
+      }
+      
+      fixedText.innerHTML = text;
+      demoInput.style.display = 'none';
+      demoOutput.style.display = 'block';
+    }
+
+    demoInput.addEventListener('input', () => {
+      demoOutput.style.display = 'none';
+      demoInput.style.display = 'block';
+      clearTimeout(demoInput.debounce);
+      demoInput.debounce = setTimeout(() => {
+        if (demoWorker) {
+          demoWorker.postMessage({ id: 'demo', text: demoInput.textContent, mode: 'report' });
+        }
+      }, 300);
+    });
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) {
+        document.querySelector(`[data-slide="${currentSlide}"]`).classList.remove('active');
+        currentSlide++;
+        document.querySelector(`[data-slide="${currentSlide}"]`).classList.add('active');
+        updateProgress();
+        
+        if (currentSlide === 2) initDemoWorker();
+      }
+    }
+
+    function updateProgress() {
+      const pct = (currentSlide / totalSlides) * 100;
+      document.querySelector('.progress-fill').style.width = pct + '%';
+      document.querySelector('.step-indicator').textContent = `Step ${currentSlide} of ${totalSlides}`;
+    }
+
+    function finishOnboarding() {
+      chrome.runtime.sendMessage({ action: 'completeOnboarding' });
+      window.close();
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      updateProgress();
+      // Add keyboard navigation
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === 'Enter') nextSlide();
+        if (e.key === 'ArrowLeft' && currentSlide > 1) {
+          document.querySelector(`[data-slide="${currentSlide}"]`).classList.remove('active');
+          currentSlide--;
+          document.querySelector(`[data-slide="${currentSlide}"]`).classList.add('active');
+          updateProgress();
+        }
+      });
+    });
+  </script>
+</body>
+</html>

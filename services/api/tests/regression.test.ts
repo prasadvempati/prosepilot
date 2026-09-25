@@ -742,6 +742,12 @@ describe("Regression — Individual Rule Spot Checks", () => {
     { rule: "gerund_to_noun", input: "Per our discussing the budget", originalSnippet: "our discussing", replacementSnippet: "our discussion" },
     { rule: "adjective_noun_order", input: "upgrade premium", originalSnippet: "upgrade premium", replacementSnippet: "premium upgrade" },
     { rule: "adjective_noun_order", input: "report inspection", originalSnippet: "report inspection", replacementSnippet: "inspection report" },
+    // NEW: Common confusion patterns (server-side rules)
+    { rule: "confused_word", input: "your going to love this", originalSnippet: "your going", replacementSnippet: "you're going" },
+    { rule: "confused_word", input: "their going to the store", originalSnippet: "their going", replacementSnippet: "they're going" },
+    { rule: "confused_word", input: "its a great day", originalSnippet: "its a", replacementSnippet: "it's a" },
+    { rule: "confused_word", input: "who's car is this", originalSnippet: "who's car", replacementSnippet: "whose car" },
+    { rule: "could_of", input: "could of done better", originalSnippet: "could of", replacementSnippet: "could have" },
   ];
 
   for (const tc of testCases) {
