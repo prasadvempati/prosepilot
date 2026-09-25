@@ -46,7 +46,7 @@ function createSidebarCard() {
   const section = CardService.newCardSection()
     .setHeader('Write like you. Only better.')
     .addWidget(CardService.newTextParagraph()
-      .setText('ProsePilot fixes grammar, spelling, and punctuation — without changing your voice. Grammarly rewrites; we refine.'))
+      .setText('ProsePilot fixes grammar, spelling, and punctuation — without changing your voice. We only refine, never rewrite.'))
     .addWidget(CardService.newButtonSet()
       .addButton(CardService.newTextButton()
         .setText('Open ProsePilot')
@@ -59,7 +59,7 @@ function createSidebarCard() {
         .setOnClickAction(CardService.newAction()
           .setFunctionName('checkDocument'))))
     .addWidget(CardService.newTextParagraph()
-      .setText('Voice Preservation Score: 94% — Grammarly would change ~40% of your style. We keep you sounding like you.')
+      .setText('Voice Preservation Score: 94% — Most tools would change ~40% of your style. We keep you sounding like you.')
       .setWrapText(true));
   
   card.setHeader(header).addSection(section);

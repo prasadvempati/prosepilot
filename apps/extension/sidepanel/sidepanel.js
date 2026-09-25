@@ -109,7 +109,7 @@ function renderVoicePreservation(vp) {
   // Update the comparison text
   const label = section.querySelector('p');
   if (label) {
-    label.textContent = `Grammarly would change ~${100 - grammarlyScore}% of your voice`;
+    label.textContent = `Most tools would change ~${100 - grammarlyScore}% of your voice`;
   }
   
   // Factor breakdown

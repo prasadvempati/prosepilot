@@ -1,5 +1,5 @@
 // Local (in-process) small-model grammar tier — Stage 2 of the "improve speed the way
-// Grammarly does, without copying their tech" plan: using an existing small pretrained
+// other tools do, without copying their tech" plan: using an existing small pretrained
 // open-source model (Xenova/grammar-synthesis-small, T5-small based, ONNX, via
 // @huggingface/transformers) instead of training anything ourselves.
 //

@@ -47,7 +47,7 @@ export default function LandingPage() {
             </h1>
             <p className="text-xl sm:text-2xl text-white/90 max-w-3xl mx-auto mb-12 leading-relaxed">
               ProsePilot fixes grammar, spelling, and punctuation — without changing your voice.
-              Grammarly rewrites; we refine.
+              We only refine, never rewrite.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
               <a
@@ -154,7 +154,7 @@ export default function LandingPage() {
                 <div>
                   <h4 className="text-lg font-semibold text-green-900">Voice Preservation Score</h4>
                   <p className="text-sm text-green-700 mt-1">
-                    Grammarly rewrites your style. ProsePilot keeps you sounding like you.
+                    Most tools rewrite your style. ProsePilot keeps you sounding like you.
                   </p>
                 </div>
                 <div className="text-4xl font-bold text-green-600">94%</div>
@@ -206,7 +206,7 @@ export default function LandingPage() {
                   </svg>
                 ),
                 title: "Your Voice, Kept",
-                desc: "Voice Preservation Score shows exactly how much of your style stays intact. Grammarly averages ~58%.",
+                desc: "Voice Preservation Score shows exactly how much of your style stays intact. Most tools average ~58% preservation.",
               },
             ].map((feature, i) => (
               <div

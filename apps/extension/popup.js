@@ -628,7 +628,7 @@ function renderVoicePreservation(vp) {
   if (!section || !badge || !label || !factors) return;
   
   const score = Math.round(vp.score * 100);
-  const grammarlyScore = Math.max(0, Math.round(100 - (vp.factors.contractionChanges * 5 + vp.factors.passiveToActive * 8 + vp.factors.sentenceRestructuring * 6 + vp.factors.formalityShifts * 5 + vp.factors.vocabularySubstitutions * 3)));
+  const otherToolsScore = Math.max(0, Math.round(100 - (vp.factors.contractionChanges * 5 + vp.factors.passiveToActive * 8 + vp.factors.sentenceRestructuring * 6 + vp.factors.formalityShifts * 5 + vp.factors.vocabularySubstitutions * 3)));
   
   section.style.display = "block";
   badge.textContent = score;
@@ -642,7 +642,9 @@ function renderVoicePreservation(vp) {
     badge.style.background = "linear-gradient(135deg,#dc2626 0%,#ef4444 100%)";
   }
   
-  label.textContent = `Grammarly would change ~${100 - grammarlyScore}% of your voice`;
+  badge.textContent = score + "%";
+  
+  label.textContent = `Most tools would change ~${100 - otherToolsScore}% of your voice`;
   
   // Factor breakdown
   const factorData = [

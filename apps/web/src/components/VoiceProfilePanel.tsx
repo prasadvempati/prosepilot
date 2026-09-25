@@ -126,7 +126,7 @@ export function VoiceProfilePanel() {
             <li>When checking new text, it only flags <strong>real errors</strong> — not your personal style</li>
             <li>Your data stays private — nothing is used for AI training</li>
           </ul>
-          <p className="text-brand-700 font-medium">Grammarly forces everyone to sound the same. ProsePilot learns how YOU write.</p>
+          <p className="text-brand-700 font-medium">Most tools force everyone to sound the same. ProsePilot learns how YOU write.</p>
         </div>
       )}
 

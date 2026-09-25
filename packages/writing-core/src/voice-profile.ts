@@ -6,8 +6,8 @@
  * - Actual errors (grammar, spelling, punctuation mistakes)
  * - Style preferences (how the user intentionally writes)
  * 
- * This is the core differentiator from Grammarly:
- * Grammarly forces everyone to sound the same.
+ * This is our core differentiator:
+ * Most tools force everyone to sound the same.
  * ProsePilot learns how YOU write and only flags real problems.
  */
 
@@ -316,7 +316,7 @@ export function shouldShowIssue(
     confidence: number;
   }
 ): boolean {
-  // If no profile, show everything ( Grammarly behavior)
+  // If no profile, show everything (default behavior)
   if (!profile || profile.sampleCount < 3) {
     return true;
   }

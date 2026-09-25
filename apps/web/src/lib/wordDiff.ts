@@ -1,7 +1,7 @@
 /**
  * Lightweight word-level diff between two strings.
  * Returns an array of DiffPart objects indicating whether each word was
- * kept, added, or removed — enough to render a Grammarly-style inline diff
+ * kept, added, or removed — enough to render an inline diff
  * without pulling in a full diff library.
  */
 
