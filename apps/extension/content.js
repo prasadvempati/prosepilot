@@ -93,6 +93,13 @@ if (!window.__prosepilot_bridge_installed) {
   // each other's results. Stores { text, issues } so renderMerged can drop results computed
   // against text that has since changed (see renderMerged() below).
   let localIssueMap = new WeakMap();
+  // Offline grammar worker tier (contractions, uncountable, proper nouns, adjective-noun,
+  // gerund→noun, capitalization, repeated words) — runs in Web Worker, zero network calls,
+  // zero main-thread blocking. Results merged same as local tier.
+  let offlineIssueMap = new WeakMap();
+  let offlineWorker = null;
+  let offlineWorkerReady = false;
+  let offlineWorkerInitPromise = null;
   // Track active popup
   let activePopup = null;
   // Track current mode. Auto-correct mode was removed (too many bug classes came from
@@ -1316,7 +1323,97 @@ if (!window.__prosepilot_bridge_installed) {
     debouncedRenderMerged(el);
   }, LOCAL_DEBOUNCE_MS);
 
-  // ==================== SUGGEST MODE ====================
+  // ==================== OFFLINE GRAMMAR WORKER ====================
+  //
+  // Runs our domain-specific grammar rules in a Web Worker — zero network calls,
+  // zero main-thread blocking. Catches: contractions, uncountable nouns, proper nouns,
+  // adjective-noun order, gerund→noun, capitalization, repeated words.
+
+  function initOfflineWorker() {
+    if (offlineWorkerInitPromise) return offlineWorkerInitPromise;
+    offlineWorkerInitPromise = (async () => {
+      try {
+        offlineWorker = new Worker(chrome.runtime.getURL("lib/offline-grammar-worker.js"));
+        offlineWorker.onmessage = (event) => {
+          const { id, issues, cached, source, error } = event.data;
+          const pending = offlineWorker.pendingRequests?.get(id);
+          if (pending) {
+            offlineWorker.pendingRequests.delete(id);
+            if (error) {
+              console.warn("[ProsePilot] Offline worker error:", error);
+              pending.resolve([]);
+            } else {
+              pending.resolve({ issues: issues || [], cached, source });
+            }
+          }
+        };
+        offlineWorker.onerror = (err) => {
+          console.warn("[ProsePilot] Offline worker error:", err);
+          offlineWorkerReady = false;
+        };
+        offlineWorker.pendingRequests = new Map();
+        
+        // Wait for worker to be ready
+        await new Promise((resolve) => {
+          const checkReady = setInterval(() => {
+            if (offlineWorker && offlineWorker.pendingRequests) {
+              clearInterval(checkReady);
+              offlineWorkerReady = true;
+              resolve();
+            }
+          }, 50);
+        });
+        console.log("[ProsePilot] Offline grammar worker ready");
+      } catch (e) {
+        console.warn("[ProsePilot] Failed to init offline worker:", e);
+        offlineWorkerReady = false;
+      }
+    })();
+    return offlineWorkerInitPromise;
+  }
+
+  function checkOfflineGrammar(text) {
+    return new Promise((resolve) => {
+      if (!offlineWorkerReady || !offlineWorker) {
+        resolve({ issues: [], cached: false, source: "offline-unavailable" });
+        return;
+      }
+      const id = `offline_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      offlineWorker.pendingRequests.set(id, { resolve });
+      offlineWorker.postMessage({ id, text });
+      
+      // Timeout fallback
+      setTimeout(() => {
+        const pending = offlineWorker.pendingRequests?.get(id);
+        if (pending) {
+          offlineWorker.pendingRequests.delete(id);
+          resolve({ issues: [], cached: false, source: "offline-timeout" });
+        }
+      }, 2000);
+    });
+  }
+
+  const triggerOfflineCheck = createPerElementDebounce(async (el) => {
+    if (!isExtensionAlive || isDisabled || currentMode === "none") return;
+
+    const text = getElementText(el);
+    if (!text || text.trim().length < MIN_TEXT_LENGTH || text.length > MAX_CHECK_LENGTH) {
+      offlineIssueMap.set(el, { text: text || "", issues: [] });
+      debouncedRenderMerged(el);
+      return;
+    }
+
+    // Bail if text changed while worker was processing
+    const result = await checkOfflineGrammar(text);
+    if (getElementText(el) !== text) return;
+
+    const issues = (result.issues || [])
+      .filter((i) => !isIgnored(i.original))
+      .filter((i) => i.replacement !== i.original);
+
+    offlineIssueMap.set(el, { text, issues });
+    debouncedRenderMerged(el);
+  }, LOCAL_DEBOUNCE_MS);
 
   function renderUnderlines(el, issues) {
     isRenderingUnderlines = true;
@@ -1839,6 +1936,7 @@ if (!window.__prosepilot_bridge_installed) {
         isRenderingUnderlines = false;
         triggerCheck(editableEl);
         triggerLocalCheck(editableEl);
+        triggerOfflineCheck(editableEl);
         return;
       }
       if (span) {
@@ -2179,8 +2277,12 @@ if (!window.__prosepilot_bridge_installed) {
     const remoteIssues = lastCheckedText.get(el) === currentText ? (issueMap.get(el) || []) : [];
     const localEntry = localIssueMap.get(el);
     const localIssues = localEntry && localEntry.text === currentText ? localEntry.issues : [];
+    const offlineEntry = offlineIssueMap.get(el);
+    const offlineIssues = offlineEntry && offlineEntry.text === currentText ? offlineEntry.issues : [];
     const remoteWords = new Set(remoteIssues.map((i) => i.original.toLowerCase()));
-    const merged = remoteIssues.concat(localIssues.filter((i) => !remoteWords.has(i.original.toLowerCase())));
+    const merged = remoteIssues
+      .concat(localIssues.filter((i) => !remoteWords.has(i.original.toLowerCase())))
+      .concat(offlineIssues.filter((i) => !remoteWords.has(i.original.toLowerCase())));
     renderUnderlines(el, merged);
   }
 
@@ -2204,11 +2306,12 @@ if (!window.__prosepilot_bridge_installed) {
     const diagLen = diagText.length;
     console.log(`[ProsePilot] Monitoring ${el.tagName} ce=${el.contentEditable} h=${el.offsetHeight} text="${diagText.substring(0, 60)}" len=${diagLen}`);
 
-    el.addEventListener("input", () => { triggerCheck(el); triggerLocalCheck(el); });
+    el.addEventListener("input", () => { triggerCheck(el); triggerLocalCheck(el); triggerOfflineCheck(el); });
     el.addEventListener("keyup", (e) => {
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(e.key)) {
         triggerCheck(el);
         triggerLocalCheck(el);
+        triggerOfflineCheck(el);
       }
     });
 
@@ -2231,7 +2334,7 @@ if (!window.__prosepilot_bridge_installed) {
     // For contentEditable, observe DOM mutations (but debounce aggressively)
     if (el.contentEditable === "true" || el.contentEditable === "") {
       const observer = new MutationObserver(() => {
-        if (!isRenderingUnderlines && !isAutoCorrecting) { triggerCheck(el); triggerLocalCheck(el); }
+        if (!isRenderingUnderlines && !isAutoCorrecting) { triggerCheck(el); triggerLocalCheck(el); triggerOfflineCheck(el); }
       });
       observer.observe(el, { childList: true, subtree: true, characterData: true });
 
@@ -2245,6 +2348,7 @@ if (!window.__prosepilot_bridge_installed) {
         }
         if (text && text.trim().length >= MIN_TEXT_LENGTH) {
           triggerLocalCheck(el);
+          triggerOfflineCheck(el);
         }
       }, 1000);
     }
@@ -2316,6 +2420,7 @@ if (!window.__prosepilot_bridge_installed) {
     injectStyles();
     await loadMode();
     await loadIgnoredWords();
+    await initOfflineWorker();
 
     // Load cached Clerk token from storage
     try {
@@ -2352,6 +2457,7 @@ if (!window.__prosepilot_bridge_installed) {
           if (text && text.trim().length >= MIN_TEXT_LENGTH) {
             triggerCheck(editable);
             triggerLocalCheck(editable);
+            triggerOfflineCheck(editable);
           }
         }, 500);
       }
@@ -2382,7 +2488,7 @@ if (!window.__prosepilot_bridge_installed) {
         if (msg.action === "setMode") {
           saveMode(msg.mode);
           lastCheckedText.delete(focusedElement);
-          if (focusedElement) { triggerCheck(focusedElement); triggerLocalCheck(focusedElement); }
+          if (focusedElement) { triggerCheck(focusedElement); triggerLocalCheck(focusedElement); triggerOfflineCheck(focusedElement); }
         } else if (msg.action === "enable") {
           isDisabled = false;
           chrome.storage.local.remove(DISABLED_KEY);

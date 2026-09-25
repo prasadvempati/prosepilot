@@ -52,10 +52,26 @@ export interface CheckRequest {
   preferences?: UserPreferences;
 }
 
+export interface VoicePreservationFactors {
+  contractionChanges: number;
+  passiveToActive: number;
+  vocabularySubstitutions: number;
+  sentenceRestructuring: number;
+  formalityShifts: number;
+  totalIssues: number;
+  voiceAlteringIssues: number;
+}
+
+export interface VoicePreservationScore {
+  score: number;
+  factors: VoicePreservationFactors;
+}
+
 export interface CheckResponse {
   issues: GrammarIssue[];
   updatedHash: string;
   usage: UsageMetadata;
+  voicePreservation?: VoicePreservationScore;
 }
 
 export interface RewriteRequest {

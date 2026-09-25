@@ -8,6 +8,105 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY!;
 const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 const LANGUAGETOOL_URL = process.env.LANGUAGETOOL_URL || "http://localhost:8010";
 
+// --- Voice Preservation Score ---
+// Measures how much the suggested changes alter the user's original voice.
+// Lower score = more changes to voice. Higher score = preserves voice.
+// 1.0 = no voice-altering changes suggested.
+// Factors: contractions added/removed, passive→active, vocabulary substitutions, 
+// sentence restructuring, formality shifts.
+
+interface VoicePreservationFactors {
+  contractionChanges: number;
+  passiveToActive: number;
+  vocabularySubstitutions: number;
+  sentenceRestructuring: number;
+  formalityShifts: number;
+  totalIssues: number;
+  voiceAlteringIssues: number;
+}
+
+function computeVoicePreservationScore(
+  _text: string,
+  issues: GrammarIssue[]
+): { score: number; factors: VoicePreservationFactors } {
+  if (issues.length === 0) {
+    return {
+      score: 1.0,
+      factors: {
+        contractionChanges: 0,
+        passiveToActive: 0,
+        vocabularySubstitutions: 0,
+        sentenceRestructuring: 0,
+        formalityShifts: 0,
+        totalIssues: 0,
+        voiceAlteringIssues: 0,
+      },
+    };
+  }
+
+  const factors: VoicePreservationFactors = {
+    contractionChanges: 0,
+    passiveToActive: 0,
+    vocabularySubstitutions: 0,
+    sentenceRestructuring: 0,
+    formalityShifts: 0,
+    totalIssues: issues.length,
+    voiceAlteringIssues: 0,
+  };
+
+  for (const issue of issues) {
+    const isVoiceAltering = 
+      issue.rule === "missing_apostrophe_contraction" ||
+      issue.rule === "passive_voice" ||
+      issue.category === "style" ||
+      issue.category === "clarity" ||
+      issue.category === "tone" ||
+      issue.category === "conciseness" ||
+      issue.rule === "adjective_noun_order" ||
+      issue.rule === "gerund_to_noun" ||
+      issue.rule === "wordiness";
+
+    if (isVoiceAltering) {
+      factors.voiceAlteringIssues++;
+    }
+
+    switch (issue.rule) {
+      case "missing_apostrophe_contraction":
+        factors.contractionChanges++;
+        break;
+      case "passive_voice":
+        factors.passiveToActive++;
+        break;
+      case "adjective_noun_order":
+      case "gerund_to_noun":
+        factors.sentenceRestructuring++;
+        break;
+      case "wordiness":
+      case "conciseness":
+        factors.formalityShifts++;
+        break;
+      default:
+        if (issue.category === "style" || issue.category === "clarity" || issue.category === "tone") {
+          factors.vocabularySubstitutions++;
+        }
+        break;
+    }
+  }
+
+  // Score calculation: base 1.0, penalty per voice-altering issue
+  // Weight: contractions=0.02, passive=0.03, restructuring=0.025, formality=0.02, vocab=0.015
+  const penalty = 
+    factors.contractionChanges * 0.02 +
+    factors.passiveToActive * 0.03 +
+    factors.sentenceRestructuring * 0.025 +
+    factors.formalityShifts * 0.02 +
+    factors.vocabularySubstitutions * 0.015;
+
+  const score = Math.max(0, Math.min(1, 1 - penalty));
+
+  return { score: Number(score.toFixed(3)), factors };
+}
+
 // --- DeepSeek result cache ---
 // checkGrammar's "review" mode calls DeepSeek unconditionally on every check (deliberate —
 // it catches things the rule engine/LanguageTool miss), which means cost scales directly
@@ -310,6 +409,7 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
     ).map(issue => trimIssueWhitespace(text, issue));
     const latencyMs = Date.now() - startTime;
     const sourceHash = await computeHash(text);
+    const voicePreservation = computeVoicePreservationScore(text, filteredIssues);
     return {
       issues: filteredIssues,
       updatedHash: sourceHash,
@@ -320,6 +420,7 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
         latencyMs,
         engineTier: "rule",
       },
+      voicePreservation,
     };
   }
 
@@ -339,6 +440,7 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
     ).map(issue => trimIssueWhitespace(text, issue));
     const latencyMs = Date.now() - startTime;
     const sourceHash = await computeHash(text);
+    const voicePreservation = computeVoicePreservationScore(text, filteredIssues);
     return {
       issues: filteredIssues,
       updatedHash: sourceHash,
@@ -349,6 +451,7 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
         latencyMs,
         engineTier: localModelIssues.length > 0 ? "local-model" : "rule",
       },
+      voicePreservation,
     };
   }
 
@@ -392,6 +495,7 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
 
   const latencyMs = Date.now() - startTime;
   const sourceHash = await computeHash(text);
+  const voicePreservation = computeVoicePreservationScore(text, allIssues);
 
   return {
     issues: allIssues,
@@ -403,6 +507,7 @@ export async function checkGrammar(request: CheckRequest & { lightweight?: boole
       latencyMs,
       engineTier: aiIssues.length > 0 ? "deepseek" : ltIssues.length > 0 ? "lt" : localModelIssues.length > 0 ? "local-model" : "rule",
     },
+    voicePreservation,
   };
 }
 
