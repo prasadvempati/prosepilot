@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 360px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .header { background: #6366f1; color: white; padding: 16px; display: flex; align-items: center; gap: 8px; }
+    .header svg { width: 20px; height: 20px; }
+    .header h1 { font-size: 16px; font-weight: 600; }
+    .content { padding: 16px; }
+    .btn { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+    .btn-primary { background: #6366f1; color: white; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-secondary { background: #f3f4f6; color: #374151; margin-top: 8px; }
+    .btn-secondary:hover { background: #e5e7eb; }
+    .footer { padding: 12px 16px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; text-align: center; }
+    .footer a { color: #6366f1; text-decoration: none; }
+    .section { margin-bottom: 16px; }
+    .section-title { font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 8px; }
+    .form-row { display: flex; gap: 4px; margin-bottom: 8px; }
+    .form-row input { flex: 1; padding: 6px 8px; border: 1px solid #e5e7eb; border-radius: 4px; font-size: 12px; }
+    .ignored-word-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-bottom: 1px solid #e5e7eb; font-size: 12px; }
+    .ignored-word-item:last-child { border-bottom: none; }
+    .ignored-word-text { color: #374151; font-family: monospace; font-size: 12px; }
+    .ignored-word-delete { background: none; border: none; color: #9ca3af; cursor: pointer; padding: 2px 6px; font-size: 16px; line-height: 1; }
+    .ignored-word-delete:hover { color: #dc2626; }
+    .empty-ignored { color: #9ca3af; font-size: 12px; text-align: center; padding: 20px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+    <h1>ProsePilot Settings</h1>
+  </div>
+  
+  <div class="content">
+    <!-- Ignored Words -->
+    <div class="section">
+      <div class="section-title">Ignored Words</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:600;color:#374151;">Ignored Words</div>
+        <button id="addIgnoredWordBtn" style="background:#6366f1;color:white;border:none;border-radius:4px;padding:4px 8px;font-size:11px;font-weight:500;cursor:pointer;">+ Add</button>
+      </div>
+      <div id="ignoredWordsList" style="max-height:120px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb;min-height:60px;"></div>
+      <div id="addIgnoredWordForm" style="display:none;margin-top:8px;gap:4px;">
+        <input type="text" id="newIgnoredWordInput" placeholder="Enter word to ignore" style="flex:1;padding:6px 8px;border:1px solid #e5e7eb;border-radius:4px;font-size:12px;">
+        <button id="saveIgnoredWordBtn" style="background:#059669;color:white;border:none;border-radius:4px;padding:6px 10px;font-size:11px;font-weight:500;cursor:pointer;">Save</button>
+        <button id="cancelIgnoredWordBtn" style="background:#f3f4f6;color:#374151;border:none;border-radius:4px;padding:6px 10px;font-size:11px;font-weight:500;cursor:pointer;">Cancel</button>
+      </div>
+    </div>
+    
+    <!-- Privacy & Support -->
+    <div class="section" style="border-top:1px solid #e5e7eb;padding-top:12px;">
+      <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:8px;">Privacy & Support</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <a id="privacyPolicyLink" href="https://prosepilot.io/privacy.html" target="_blank" style="color:#6366f1;font-size:12px;text-decoration:none;display:flex;align-items:center;gap:6px;">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+          Privacy Policy
+        </a>
+        <button id="reportIssueBtn" style="color:#dc2626;font-size:12px;background:none;border:none;cursor:pointer;text-align:left;display:flex;align-items:center;gap:6px;padding:0;">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          Report Incorrect Suggestion
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <div class="footer">
+    <a href="https://prosepilot.io" target="_blank">ProsePilot</a> — Your Writing Co-Pilot
+  </div>
+  
+  <script>
+    // Load ignored words on load
+    google.script.run.withSuccessHandler(renderIgnoredWords).getIgnoredWords();
+    
+    document.getElementById('addIgnoredWordBtn').addEventListener('click', () => {
+      document.getElementById('addIgnoredWordBtn').style.display = 'none';
+      document.getElementById('addIgnoredWordForm').style.display = 'flex';
+      document.getElementById('newIgnoredWordInput').focus();
+    });
+    
+    document.getElementById('cancelIgnoredWordBtn').addEventListener('click', () => {
+      document.getElementById('addIgnoredWordBtn').style.display = 'block';
+      document.getElementById('addIgnoredWordForm').style.display = 'none';
+      document.getElementById('newIgnoredWordInput').value = '';
+    });
+    
+    document.getElementById('saveIgnoredWordBtn').addEventListener('click', () => {
+      const word = document.getElementById('newIgnoredWordInput').value.trim().toLowerCase();
+      if (!word) return;
+      google.script.run.withSuccessHandler(() => {
+        document.getElementById('addIgnoredWordBtn').style.display = 'block';
+        document.getElementById('addIgnoredWordForm').style.display = 'none';
+        document.getElementById('newIgnoredWordInput').value = '';
+        google.script.run.withSuccessHandler(renderIgnoredWords).getIgnoredWords();
+      }).addIgnoredWord(word);
+    });
+    
+    document.getElementById('newIgnoredWordInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') document.getElementById('saveIgnoredWordBtn').click();
+      if (e.key === 'Escape') document.getElementById('cancelIgnoredWordBtn').click();
+    });
+    
+    document.getElementById('privacyPolicyLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      google.script.run.openUrl('https://prosepilot.io/privacy.html');
+    });
+    
+    document.getElementById('reportIssueBtn').addEventListener('click', () => {
+      google.script.run.openUrl('https://github.com/prasadvempati/prosepilot/issues/new?template=bug_report.md');
+    });
+    
+    function renderIgnoredWords(words) {
+      const list = document.getElementById('ignoredWordsList');
+      if (!words || words.length === 0) {
+        list.innerHTML = '<div class="empty-ignored">No ignored words yet. Click + Add to add one.</div>';
+        return;
+      }
+      list.innerHTML = words.map(word => `
+        <div class="ignored-word-item">
+          <span class="ignored-word-text">${escapeHtml(word)}</span>
+          <button class="ignored-word-delete" data-word="${escapeHtml(word)}" title="Remove">&times;</button>
+        </div>
+      `).join('');
+      
+      list.querySelectorAll('.ignored-word-delete').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const word = btn.dataset.word;
+          google.script.run.withSuccessHandler(() => {
+            google.script.run.withSuccessHandler(renderIgnoredWords).getIgnoredWords();
+          }).removeIgnoredWord(word);
+        });
+      });
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
+    }
+    
+    // Load ignored words on load
+    google.script.run.withSuccessHandler(renderIgnoredWords).getIgnoredWords();
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "prosepilot-google-docs-addon",
+  "version": "1.0.0",
+  "description": "ProsePilot Google Docs Add-on",
+  "main": "src/Code.gs",
+  "scripts": {
+    "push": "clasp push",
+    "deploy": "clasp deploy",
+    "logs": "clasp logs",
+    "open": "clasp open"
+  },
+  "devDependencies": {
+    "@google/clasp": "^2.4.0"
+  },
+  "private": true
+}
