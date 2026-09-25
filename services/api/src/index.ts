@@ -11,6 +11,7 @@ import { billingRoutes } from "./routes/billing.js";
 import { documentRoutes } from "./routes/documents.js";
 import { voiceProfileRoutes } from "./routes/voice-profile.js";
 import { clerkWebhookRoutes } from "./routes/clerk-webhook.js";
+import { teamRoutes } from "./routes/team.js";
 import { warmUpLocalModel } from "./engine/localGrammarModel.js";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -101,6 +102,7 @@ await app.register(billingRoutes);
 await app.register(documentRoutes);
 await app.register(voiceProfileRoutes);
 await app.register(clerkWebhookRoutes);
+await app.register(teamRoutes);
 
 // --- Serve Frontend & SPA Fallback ---
 

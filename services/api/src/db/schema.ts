@@ -1,4 +1,4 @@
-import { pgTable, timestamp, integer, jsonb, varchar, uuid } from "drizzle-orm/pg-core";
+import { pgTable, timestamp, integer, jsonb, varchar, uuid, boolean, text } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -19,6 +19,28 @@ export const organizations = pgTable("organizations", {
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   dataRegion: varchar("data_region", { length: 50 }).default("us"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // SSO Configuration
+  ssoEnabled: boolean("sso_enabled").default(false),
+  ssoProvider: varchar("sso_provider", { length: 50 }), // "saml" | "oidc"
+  ssoEntityId: varchar("sso_entity_id", { length: 500 }),
+  ssoSsoUrl: varchar("sso_sso_url", { length: 500 }),
+  ssoCertificate: text("sso_certificate"),
+  ssoAttributeMapping: jsonb("sso_attribute_mapping").$type<{ email?: string; firstName?: string; lastName?: string; groups?: string }>().default({}),
+  // Team Settings
+  defaultTone: varchar("default_tone", { length: 30 }).default("professional"),
+  defaultLanguage: varchar("default_language", { length: 10 }).default("en-US"),
+  allowedDomains: jsonb("allowed_domains").$type<string[]>().default([]),
+  enforceSso: boolean("enforce_sso").default(false),
+});
+
+export const teamSettings = pgTable("team_settings", {
+  organizationId: uuid("organization_id").primaryKey().references(() => organizations.id, { onDelete: "cascade" }),
+  styleGuide: jsonb("style_guide").$type<Array<{ rule: string; enabled: boolean; severity: string }>>().default([]),
+  sharedVocabulary: jsonb("shared_vocabulary").$type<string[]>().default([]),
+  blockedTerms: jsonb("blocked_terms").$type<string[]>().default([]),
+  customRules: jsonb("custom_rules").$type<Array<{ pattern: string; replacement: string; explanation: string; category: string }>>().default([]),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  updatedBy: uuid("updated_by").references(() => users.id),
 });
 
 export const memberships = pgTable("memberships", {
