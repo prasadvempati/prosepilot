@@ -163,21 +163,11 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
   const sourceHash = computeHashSync(text);
 
   const rules: Array<{ pattern: RegExp; replacement: string | ((match: string, ...groups: string[]) => string); category: GrammarIssue["category"]; rule: string; explanation: string }> = [
-    // === CAPITALIZATION ===
-    // Sentence starts with lowercase after period/exclamation/question
-    { pattern: /([.!?]\s+)([a-z])/g, replacement: (_m, p1, p2) => p1 + p2.toUpperCase(), category: "grammar", rule: "capitalize_after_period", explanation: "Capitalize the first word of a new sentence." },
-    // Sentence start at beginning of text — capitalize first letter. Tolerates leading
-    // whitespace/newlines before the first word: contentEditable extraction (e.g. Outlook's
-    // compose box) can produce text with a leading "\n" from an empty first line, which
-    // defeated the old strict ^([a-z]) anchor and silently skipped this fix entirely.
-    { pattern: /^(\s*)([a-z])/g, replacement: (_m: string, ws: string, letter: string) => ws + letter.toUpperCase(), category: "grammar", rule: "capitalize_sentence_start", explanation: "Capitalize the first word of a sentence." },
+    // === DOMAIN-SPECIFIC OVERRIDES ONLY ===
+    // LanguageTool handles all general grammar/spelling/punctuation.
+    // These rules exist ONLY for ProsePilot-specific terminology and patterns
+    // that LanguageTool doesn't know about.
 
-    // === SUBJECT-VERB AGREEMENT (deterministic, unambiguous cases only) ===
-    // "has" only agrees with he/she/it/singular nouns — it is NEVER correct after I/you/we/they,
-    // so this is a safe, always-correct fix (unlike general subject-verb agreement, which needs
-    // real parsing). Matched via lookbehind so only "has" itself is replaced — the pronoun's own
-    // capitalization (handled by the rules above) stays a separate, non-overlapping edit.
-    { pattern: /(?<=\b(?:i|you|we|they)\s)has\b/gi, replacement: "have", category: "grammar", rule: "subject_verb_agreement", explanation: "Use 'have', not 'has', with I/you/we/they." },
     // Product/brand names — Prosepilot → ProsePilot
     { pattern: /\bProsepilot\b/g, replacement: "ProsePilot", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'ProsePilot' should be capitalized correctly." },
     { pattern: /\bGrammarly\b/gi, replacement: "Grammarly", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'Grammarly' should be capitalized correctly." },
@@ -185,71 +175,46 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     { pattern: /\bGoogle\b/gi, replacement: "Google", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'Google' should be capitalized correctly." },
     { pattern: /\bOpenai\b/g, replacement: "OpenAI", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'OpenAI' should be capitalized correctly." },
     { pattern: /\bDeepseek\b/g, replacement: "DeepSeek", category: "spelling", rule: "proper_noun_capitalization", explanation: "Proper noun 'DeepSeek' should be capitalized correctly." },
-    // "the edge" → "The Edge" (Microsoft Edge product)
-    { pattern: /\bthe edge\b/gi, replacement: "The Edge", category: "grammar", rule: "proper_noun_article", explanation: "'The Edge' is a proper noun (product name) and should be capitalized." },
 
-    // === PUNCTUATION ===
-    // Space before comma/period/semicolon/colon
-    { pattern: /(\w) ,/g, replacement: "$1,", category: "punctuation", rule: "space_before_comma", explanation: "Remove space before comma." },
-    { pattern: /(\w) \./g, replacement: "$1.", category: "punctuation", rule: "space_before_period", explanation: "Remove space before period." },
-    { pattern: /(\w) ;/g, replacement: "$1;", category: "punctuation", rule: "space_before_semicolon", explanation: "Remove space before semicolon." },
-    { pattern: /(\w) :/g, replacement: "$1:", category: "punctuation", rule: "space_before_colon", explanation: "Remove space before colon." },
-    // Space before closing quote/bracket
-    { pattern: /(\w) \)/g, replacement: "$1)", category: "punctuation", rule: "space_before_paren", explanation: "Remove space before closing parenthesis." },
-    // Double spaces
-    { pattern: /  +/g, replacement: " ", category: "style", rule: "double_space", explanation: "Remove extra spaces." },
-    // Missing period at end of sentence. The negative lookbehind excludes lines that
-    // already end in a comma, colon, or semicolon — e.g. an email salutation like
-    // "Hello Abraham," is correctly terminated for its purpose and should never get a
-    // period appended right after the comma ("Hello Abraham,."). The base character
-    // class only ever checked for . ! ? } " anywhere in the line, not what the line
-    // actually ends with, which is what let this false positive through.
-    //
-    // Requires an internal \s (i.e. at least two words) before the line qualifies — found
-    // via a real bug report: a standalone single-word line like "Teresa" (a bare-name email
-    // salutation, e.g. addressing the recipient with just their name on its own line before
-    // the message body — extremely common in the Outlook/email context this extension is
-    // used in) was being flagged as a sentence missing a period ("Teresa" -> "Teresa."). A
-    // lone capitalized word on its own line is virtually always a name, header, or label,
-    // never an incomplete declarative sentence, so it shouldn't trigger this rule at all.
-    //
-    // Two live-bug guards baked into this pattern/replacement:
-    // 1. Trailing space: Outlook contenteditable extraction often yields a line ending in
-    //    a space ("It has to be done through "). The old "$1." capture included that space,
-    //    producing "It has to be done through ." — a period stranded after a space.
-    //    trimIssueWhitespace then stripped the space off `original` but left it embedded
-    //    before the period in `replacement`. The replacement function trims before appending.
-    // 2. Internal separator is [ \t], NOT \s: \s also matches \n, so the old pattern could
-    //    straddle a line break and treat two consecutive lines as one "sentence" (the [^…]
-    //    classes already exclude \n, but the single \s between them re-opened the door).
-    {
-      pattern: /^([A-Z][^.!?}\n"]*[ \t][^.!?}\n"]+)(?<![,:;])$/gm,
-      replacement: (m: string) => m.replace(/[ \t]+$/, "") + ".",
-      category: "punctuation",
-      rule: "missing_period",
-      explanation: "Sentences should end with a period.",
-    },
-    // Double punctuation
-    { pattern: /\.\./g, replacement: "...", category: "punctuation", rule: "double_period", explanation: "Use an ellipsis (...) not double periods." },
-    // Missing comma after introductory/conditional clause
-    { pattern: /\b(If|When|While|Although|Because|Since|Unless|After|Before|Until|Once|Whenever|Wherever|Whether)\s+([^,]+?)\s+([A-Z][a-z]*)/g, replacement: "$1 $2, $3", category: "punctuation", rule: "comma_after_conditional", explanation: "Use a comma after an introductory or conditional clause." },
+    // Property management domain terms
+    { pattern: /\bupgrade premium\b/gi, replacement: "premium upgrade", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'premium upgrade' not 'upgrade premium'." },
+    { pattern: /\breport inspection\b/gi, replacement: "inspection report", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'inspection report' not 'report inspection'." },
+    { pattern: /\binspection site visit\b/gi, replacement: "site visit inspection", category: "style", rule: "adjective_noun_order", explanation: "Reorder: 'site visit inspection' not 'inspection site visit'." },
+    { pattern: /\btile shower\b/gi, replacement: "shower tile", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'shower tile' not 'tile shower'." },
+    { pattern: /\bschedule gate\b/gi, replacement: "gate schedule", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'gate schedule' not 'schedule gate'." },
+    { pattern: /\btrim border\b/gi, replacement: "border trim", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'border trim' not 'trim border'." },
+    { pattern: /\blist units\b/gi, replacement: "unit list", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'unit list' not 'list units'." },
+    { pattern: /\bcondition exterior\b/gi, replacement: "exterior condition", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'exterior condition' not 'condition exterior'." },
+    { pattern: /\breadiness unit\b/gi, replacement: "unit readiness", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'unit readiness' not 'readiness unit'." },
+    { pattern: /\bupdates progress\b/gi, replacement: "progress updates", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'progress updates' not 'updates progress'." },
 
-    // === MISSING APOSTROPHE IN CONTRACTIONS (unambiguous cases only) ===
-    // Found via a live bug: the local small-model tier (localGrammarModel.ts) was observed
-    // "fixing" the typo "dont" into "do" instead of "don't" — silently DROPPING THE NEGATION
-    // and inverting the sentence's meaning ("I dont want to loose this" -> "I do want to
-    // lose this"), while still being tagged "Safe auto-fix". The model's small-edit-distance
-    // safety heuristic can't tell "restore the apostrophe" apart from "delete two letters",
-    // and both look equally "safe" by that metric alone.
-    //
-    // These specific words have NO valid standalone English reading without the apostrophe
-    // (unlike e.g. "its", which is a legitimate possessive on its own — that ambiguous case
-    // is handled separately, in localGrammarModel.ts's classify(), not here) — so restoring
-    // the apostrophe is always correct, deterministically, without needing any model at all.
-    // This also fixes the bug directly: mergeAllIssues() gives the rule engine priority over
-    // the local model at the same text span, so once this rule fires on "dont", the local
-    // model's wrong "dont"->"do" suggestion at that same span is dropped by the merge dedup
-    // rather than shown alongside (or instead of) the correct fix.
+    // === UNCOUNTABLE NOUNS (LanguageTool may miss these in context) ===
+    { pattern: /\bfoods\b/gi, replacement: "food", category: "grammar", rule: "uncountable_noun", explanation: "'Food' is typically uncountable. Use 'food' not 'foods'." },
+    { pattern: /\binformations\b/gi, replacement: "information", category: "grammar", rule: "uncountable_noun", explanation: "'Information' is uncountable. Use 'information' not 'informations'." },
+    { pattern: /\badvices\b/gi, replacement: "advice", category: "grammar", rule: "uncountable_noun", explanation: "'Advice' is uncountable. Use 'advice' not 'advices'." },
+    { pattern: /\bequipments\b/gi, replacement: "equipment", category: "grammar", rule: "uncountable_noun", explanation: "'Equipment' is uncountable. Use 'equipment' not 'equipments'." },
+    { pattern: /\bfurnitures\b/gi, replacement: "furniture", category: "grammar", rule: "uncountable_noun", explanation: "'Furniture' is uncountable. Use 'furniture' not 'furnitures'." },
+    { pattern: /\bstaffs\b/gi, replacement: "staff", category: "grammar", rule: "uncountable_noun", explanation: "'Staff' is typically uncountable. Use 'staff' not 'staffs'." },
+    { pattern: /\bhomeworks\b/gi, replacement: "homework", category: "grammar", rule: "uncountable_noun", explanation: "'Homework' is uncountable. Use 'homework' not 'homeworks'." },
+    { pattern: /\bmails\b/g, replacement: "mail", category: "grammar", rule: "uncountable_noun", explanation: "'Mail' is typically uncountable. Use 'mail' not 'mails'." },
+    { pattern: /\bprogresses\b/gi, replacement: "progress", category: "grammar", rule: "uncountable_noun", explanation: "'Progress' is uncountable. Use 'progress' not 'progresses'." },
+    { pattern: /\bresearches\b/gi, replacement: "research", category: "grammar", rule: "uncountable_noun", explanation: "'Research' is uncountable. Use 'research' not 'researches'." },
+    { pattern: /\bevidences\b/gi, replacement: "evidence", category: "grammar", rule: "uncountable_noun", explanation: "'Evidence' is uncountable. Use 'evidence' not 'evidences'." },
+
+    // === WORD FORM ERRORS (LanguageTool may miss gerund→noun after possessive) ===
+    { pattern: /\bour discussing\b/gi, replacement: "our discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after a possessive, not the gerund 'discussing'." },
+    { pattern: /\btheir discussing\b/gi, replacement: "their discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after a possessive, not the gerund 'discussing'." },
+    { pattern: /\bthe discussing\b/gi, replacement: "the discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after 'the', not the gerund 'discussing'." },
+    { pattern: /\ba discussing\b/gi, replacement: "a discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after 'a', not the gerund 'discussing'." },
+    { pattern: /\bduring discussing\b/gi, replacement: "during the discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use 'during the discussion', not 'during discussing'." },
+    { pattern: /\bper our discussing\b/gi, replacement: "Per our discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after 'our', not the gerund 'discussing'." },
+
+    // === MISSING OBJECT PRONOUN (LanguageTool may not catch this specific pattern) ===
+    // "they finished on time" → "they finished it on time"
+    { pattern: /\b(finished|completed|submitted|reviewed|approved|processed|resolved|addressed|handled|finished up|wrapped up) (on time|early|late|before|after|today|yesterday|this week|last week|this month|next week)\b/gi, replacement: "$1 it $2", category: "grammar", rule: "missing_object_pronoun", explanation: "This verb typically needs a direct object. Add 'it' to clarify what was finished." },
+
+    // Missing apostrophe in contractions (unambiguous — LanguageTool sometimes misses these)
+    // These words have NO valid standalone English reading without the apostrophe
     { pattern: /\bdont\b/gi, replacement: (m: string) => applyContractionCase(m, "don't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"don't\"." },
     { pattern: /\bcant\b/gi, replacement: (m: string) => applyContractionCase(m, "can't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"can't\"." },
     { pattern: /\bwont\b/gi, replacement: (m: string) => applyContractionCase(m, "won't"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"won't\"." },
@@ -271,107 +236,6 @@ function detectRuleBasedIssues(text: string): GrammarIssue[] {
     { pattern: /\bweve\b/gi, replacement: (m: string) => applyContractionCase(m, "we've"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"we've\"." },
     { pattern: /\bwhats\b/gi, replacement: (m: string) => applyContractionCase(m, "what's"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"what's\"." },
     { pattern: /\bthats\b/gi, replacement: (m: string) => applyContractionCase(m, "that's"), category: "grammar", rule: "missing_apostrophe_contraction", explanation: "Missing apostrophe: should be \"that's\"." },
-
-    // === WORD FORM ERRORS ===
-    // Gerund after possessive/preposition — should be noun
-    { pattern: /\bour discussing\b/gi, replacement: "our discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after a possessive, not the gerund 'discussing'." },
-    { pattern: /\btheir discussing\b/gi, replacement: "their discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after a possessive, not the gerund 'discussing'." },
-    { pattern: /\bthe discussing\b/gi, replacement: "the discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after 'the', not the gerund 'discussing'." },
-    { pattern: /\ba discussing\b/gi, replacement: "a discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after 'a', not the gerund 'discussing'." },
-    { pattern: /\bduring discussing\b/gi, replacement: "during the discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use 'during the discussion', not 'during discussing'." },
-    { pattern: /\bper our discussing\b/gi, replacement: "Per our discussion", category: "grammar", rule: "gerund_to_noun", explanation: "Use the noun form 'discussion' after 'our', not the gerund 'discussing'." },
-
-    // === UNCOUNTABLE NOUNS ===
-    { pattern: /\bfoods\b/gi, replacement: "food", category: "grammar", rule: "uncountable_noun", explanation: "'Food' is typically uncountable. Use 'food' not 'foods'." },
-    { pattern: /\binformations\b/gi, replacement: "information", category: "grammar", rule: "uncountable_noun", explanation: "'Information' is uncountable. Use 'information' not 'informations'." },
-    { pattern: /\badvices\b/gi, replacement: "advice", category: "grammar", rule: "uncountable_noun", explanation: "'Advice' is uncountable. Use 'advice' not 'advices'." },
-    { pattern: /\bequipments\b/gi, replacement: "equipment", category: "grammar", rule: "uncountable_noun", explanation: "'Equipment' is uncountable. Use 'equipment' not 'equipments'." },
-    { pattern: /\bfurnitures\b/gi, replacement: "furniture", category: "grammar", rule: "uncountable_noun", explanation: "'Furniture' is uncountable. Use 'furniture' not 'furnitures'." },
-    { pattern: /\bstaffs\b/gi, replacement: "staff", category: "grammar", rule: "uncountable_noun", explanation: "'Staff' is typically uncountable. Use 'staff' not 'staffs'." },
-    { pattern: /\bhomeworks\b/gi, replacement: "homework", category: "grammar", rule: "uncountable_noun", explanation: "'Homework' is uncountable. Use 'homework' not 'homeworks'." },
-    { pattern: /\bmails\b/g, replacement: "mail", category: "grammar", rule: "uncountable_noun", explanation: "'Mail' is typically uncountable. Use 'mail' not 'mails'." },
-    { pattern: /\bprogresses\b/gi, replacement: "progress", category: "grammar", rule: "uncountable_noun", explanation: "'Progress' is uncountable. Use 'progress' not 'progresses'." },
-    { pattern: /\bresearches\b/gi, replacement: "research", category: "grammar", rule: "uncountable_noun", explanation: "'Research' is uncountable. Use 'research' not 'researches'." },
-    { pattern: /\bevidences\b/gi, replacement: "evidence", category: "grammar", rule: "uncountable_noun", explanation: "'Evidence' is uncountable. Use 'evidence' not 'evidences'." },
-
-    // === MISSING OBJECT PRONOUN ===
-    // "they finished on time" → "they finished it on time"
-    { pattern: /\b(finished|completed|submitted|reviewed|approved|processed|resolved|addressed|handled|finished up|wrapped up) (on time|early|late|before|after|today|yesterday|this week|last week|this month|next week)\b/gi, replacement: "$1 it $2", category: "grammar", rule: "missing_object_pronoun", explanation: "This verb typically needs a direct object. Add 'it' to clarify what was finished." },
-
-    // === ADJECTIVE-NOUN WORD ORDER ===
-    // Common reversed pairs in property management
-    { pattern: /\bupgrade premium\b/gi, replacement: "premium upgrade", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'premium upgrade' not 'upgrade premium'." },
-    { pattern: /\breport inspection\b/gi, replacement: "inspection report", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'inspection report' not 'report inspection'." },
-    { pattern: /\binspection site visit\b/gi, replacement: "site visit inspection", category: "style", rule: "adjective_noun_order", explanation: "Reorder: 'site visit inspection' not 'inspection site visit'." },
-    { pattern: /\btile shower\b/gi, replacement: "shower tile", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'shower tile' not 'tile shower'." },
-    { pattern: /\bschedule gate\b/gi, replacement: "gate schedule", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'gate schedule' not 'schedule gate'." },
-    { pattern: /\btrim border\b/gi, replacement: "border trim", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'border trim' not 'trim border'." },
-    { pattern: /\blist units\b/gi, replacement: "unit list", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'unit list' not 'list units'." },
-    { pattern: /\bcondition exterior\b/gi, replacement: "exterior condition", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'exterior condition' not 'condition exterior'." },
-    { pattern: /\breadiness unit\b/gi, replacement: "unit readiness", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'unit readiness' not 'readiness unit'." },
-    { pattern: /\bupdates progress\b/gi, replacement: "progress updates", category: "style", rule: "adjective_noun_order", explanation: "Adjective before noun: 'progress updates' not 'updates progress'." },
-
-    // === COMMONLY CONFUSED WORDS ===
-    // their/there/they're
-    { pattern: /\btheir\s+going\b/gi, replacement: "they're going", category: "grammar", rule: "confused_word", explanation: "Use 'they're' (they are) not 'their' (possessive)." },
-    { pattern: /\btheir\s+here\b/gi, replacement: "they're here", category: "grammar", rule: "confused_word", explanation: "Use 'they're' (they are) not 'their' (possessive)." },
-    { pattern: /\btheir\s+is\b/gi, replacement: "there is", category: "grammar", rule: "confused_word", explanation: "Use 'there' (location) not 'their' (possessive)." },
-    // your/you're
-    { pattern: /\byour\s+welcome\b/gi, replacement: "you're welcome", category: "grammar", rule: "confused_word", explanation: "Use 'you're' (you are) not 'your' (possessive)." },
-    { pattern: /\byour\s+right\b/gi, replacement: "you're right", category: "grammar", rule: "confused_word", explanation: "Use 'you're' (you are) not 'your' (possessive)." },
-    // its/it's
-    { pattern: /\bits\s+a\b/gi, replacement: "it's a", category: "grammar", rule: "confused_word", explanation: "Use 'it's' (it is) not 'its' (possessive)." },
-    { pattern: /\bits\s+the\b/gi, replacement: "it's the", category: "grammar", rule: "confused_word", explanation: "Use 'it's' (it is) not 'its' (possessive)." },
-    // who's/whose
-    { pattern: /\bwho's\s+car\b/gi, replacement: "whose car", category: "grammar", rule: "confused_word", explanation: "Use 'whose' (possessive) not 'who's' (who is)." },
-    { pattern: /\bwho's\s+idea\b/gi, replacement: "whose idea", category: "grammar", rule: "confused_word", explanation: "Use 'whose' (possessive) not 'who's' (who is)." },
-    // affect/effect (common confusion)
-    { pattern: /\bhave\s+an\s+affect\b/gi, replacement: "have an effect", category: "grammar", rule: "confused_word", explanation: "Use 'effect' (noun) not 'affect' (verb) after 'an'." },
-    // then/than
-    { pattern: /\bmore\s+\w+\s+then\b/gi, replacement: (m: string) => m.replace(/\bthen\b/gi, "than"), category: "grammar", rule: "confused_word", explanation: "Use 'than' for comparisons, not 'then' (time)." },
-    { pattern: /\bbetter\s+\w+\s+then\b/gi, replacement: (m: string) => m.replace(/\bthen\b/gi, "than"), category: "grammar", rule: "confused_word", explanation: "Use 'than' for comparisons, not 'then' (time)." },
-    // could of/should of/would of (phonetic misspelling)
-    { pattern: /\bcould\s+of\b/gi, replacement: "could have", category: "grammar", rule: "could_of", explanation: "Use 'could have' not 'could of'." },
-    { pattern: /\bshould\s+of\b/gi, replacement: "should have", category: "grammar", rule: "should_of", explanation: "Use 'should have' not 'should of'." },
-    { pattern: /\bwould\s+of\b/gi, replacement: "would have", category: "grammar", rule: "would_of", explanation: "Use 'would have' not 'would of'." },
-    { pattern: /\bmight\s+of\b/gi, replacement: "might have", category: "grammar", rule: "might_of", explanation: "Use 'might have' not 'might of'." },
-    { pattern: /\bmust\s+of\b/gi, replacement: "must have", category: "grammar", rule: "must_of", explanation: "Use 'must have' not 'must of'." },
-
-    // === WORDINESS / CONCISENESS ===
-    { pattern: /\bin order to\b/gi, replacement: "to", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'in order to' → 'to'." },
-    { pattern: /\bdue to the fact that\b/gi, replacement: "because", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'due to the fact that' → 'because'." },
-    { pattern: /\bat this point in time\b/gi, replacement: "now", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'at this point in time' → 'now'." },
-    { pattern: /\bin the event that\b/gi, replacement: "if", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'in the event that' → 'if'." },
-    { pattern: /\bfor the purpose of\b/gi, replacement: "to", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'for the purpose of' → 'to'." },
-    { pattern: /\bin the near future\b/gi, replacement: "soon", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'in the near future' → 'soon'." },
-    { pattern: /\ba large number of\b/gi, replacement: "many", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'a large number of' → 'many'." },
-    { pattern: /\bin spite of\b/gi, replacement: "despite", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'in spite of' → 'despite'." },
-    { pattern: /\bwith regard to\b/gi, replacement: "about", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'with regard to' → 'about'." },
-    { pattern: /\bin regards to\b/gi, replacement: "about", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'in regards to' → 'about'." },
-    { pattern: /\bthe reason why is\b/gi, replacement: "because", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'the reason why is' → 'because'." },
-    { pattern: /\bhas the ability to\b/gi, replacement: "can", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'has the ability to' → 'can'." },
-    { pattern: /\bis able to\b/gi, replacement: "can", category: "conciseness", rule: "wordiness", explanation: "Simplify: 'is able to' → 'can'." },
-
-    // === PASSIVE VOICE (common patterns) ===
-    { pattern: /\bwas\s+written\s+by\b/gi, replacement: (m: string) => m, category: "style", rule: "passive_voice", explanation: "Consider active voice: 'X wrote this' instead of 'this was written by X'." },
-    { pattern: /\bwere\s+created\s+by\b/gi, replacement: (m: string) => m, category: "style", rule: "passive_voice", explanation: "Consider active voice: 'X created these' instead of 'these were created by X'." },
-    { pattern: /\bwas\s+completed\s+by\b/gi, replacement: (m: string) => m, category: "style", rule: "passive_voice", explanation: "Consider active voice: 'X completed it' instead of 'it was completed by X'." },
-
-    // === MISSING COMMA IN COMPOUND SENTENCES ===
-    // "I went to the store and I bought milk" → "I went to the store, and I bought milk"
-    { pattern: /\b(I|[A-Z][a-z]+)\s+\w+\s+\w+\s+and\s+(I|[A-Z][a-z]+)\s+\w+/g, replacement: (m: string) => {
-      const parts = m.split(/\s+and\s+/);
-      if (parts.length === 2 && parts[0].split(' ').length >= 3 && parts[1].split(' ').length >= 2) {
-        return parts[0] + ', and ' + parts[1];
-      }
-      return m;
-    }, category: "punctuation", rule: "comma_before_and", explanation: "Use a comma before 'and' joining two independent clauses." },
-
-    // === REPEATED WORDS ===
-    { pattern: /\b(the|a|an|is|are|was|were|have|has|had|do|does|did|can|could|will|would|shall|should|may|might|must)\s+\1\b/gi, replacement: "$1", category: "grammar", rule: "repeated_word", explanation: "Word is repeated." },
-
-    // === MISSING SUBJECT ===
-    { pattern: /\b(is|are|was|were|have|has|had|do|does|did|can|could|will|would|shall|should|may|might|must)\s+(going|coming|running|walking|working|playing|eating|sleeping|trying|making|taking|giving|getting|looking|seeing|thinking|knowing|wanting|needing|feeling|being|becoming|having|saying|finding|telling|asking|using|working|calling|trying|following|keeping|beginning|seeming|helping|showing|hearing|providing|standing|reading|spending|growing|opening|walking|offering|remembering|loving|considering|appearing|buying|waiting|serving|dying|sending|expecting|building|staying|falling|cutting|reaching|killing|remaining|suggesting|raising|passing|serving|selling|requiring|reporting|deciding|pulling|developing)\b/gi, replacement: (m: string) => "I " + m, category: "grammar", rule: "missing_subject", explanation: "Sentence appears to be missing a subject." },
   ];
 
   for (const rule of rules) {

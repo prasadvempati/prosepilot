@@ -1,8 +1,22 @@
 [build]
 builder = "dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 healthcheckPath = "/health/live"
-healthcheckTimeout = 120
+healthcheckTimeout = 180
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 5
+
+[services.api]
+name = "prosepilot-api"
+dockerfilePath = "Dockerfile"
+
+[services.languagetool]
+name = "languagetool"
+image = "erikvl87/languagetool:latest"
+port = 8010
+healthcheckPath = "/v2/check?text=test&language=en-US"
+healthcheckTimeout = 120
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

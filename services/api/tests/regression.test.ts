@@ -35,7 +35,7 @@ describe("Regression — Grammar Engine", () => {
   // TC-R001: Regex infinite loop — detectRuleBasedIssues must not hang
   it("TC-R001: does not hang on text with many regex matches (infinite loop guard)", async () => {
     // Text that triggers many rules simultaneously
-    const text = "hello . hello . hello . hello . hello . hello . hello . hello . hello . hello .";
+    const text = "I dont know. you cant go. it wont work. hello . hello . hello .";
     const result = await timed(async () => {
       return checkGrammar({ text, mode: "report", rulesOnly: true });
     }, 3000);
@@ -45,29 +45,30 @@ describe("Regression — Grammar Engine", () => {
   // TC-R002: Regex lastIndex reset — multiple patterns applied sequentially
   it("TC-R002: regex lastIndex properly reset across sequential patterns", async () => {
     // Text with multiple different rule triggers in sequence
-    const text = "hello . world , foo ; bar : baz ) qux  double  spaces .. done.";
+    const text = "I dont know. we need equipments. upgrade premium is here.";
     const result = await checkGrammar({ text, mode: "report", rulesOnly: true });
-    assert.ok(result.issues.length >= 4, `Expected >=4 issues, got ${result.issues.length}`);
+    assert.ok(result.issues.length >= 3, `Expected >=3 issues, got ${result.issues.length}`);
     const rules = ruleIds(result.issues);
-    assert.ok(rules.includes("space_before_period"));
-    assert.ok(rules.includes("double_space"));
+    assert.ok(rules.includes("missing_apostrophe_contraction"));
+    assert.ok(rules.includes("uncountable_noun"));
   });
 
-  // TC-R003: Capitalization after period still works
-  it("TC-R003: capitalize after period is detected", async () => {
-    const r = await checkGrammar({ text: "The end. next sentence.", mode: "report", rulesOnly: true });
-    assert.ok(ruleIds(r.issues).includes("capitalize_after_period"));
-    const issue = r.issues.find((i) => i.rule === "capitalize_after_period");
-    // The regex captures `. n` — the period+space+lowercase letter
-    assert.ok(issue, "capitalize_after_period issue should exist");
+  // TC-R003: Domain-specific proper noun capitalization still works
+  it("TC-R003: proper noun capitalization is detected", async () => {
+    const r = await checkGrammar({ text: "We use Prosepilot", mode: "report", rulesOnly: true });
+    assert.ok(ruleIds(r.issues).includes("proper_noun_capitalization"));
+    const issue = r.issues.find((i) => i.rule === "proper_noun_capitalization");
+    assert.ok(issue, "proper_noun_capitalization issue should exist");
     assert.ok(issue!.original.length > 0, "original should be non-empty");
     assert.ok(issue!.replacement.length > 0, "replacement should be non-empty");
   });
 
-  // TC-R004: Missing period detection still works
-  it("TC-R004: missing period at end of sentence", async () => {
-    const r = await checkGrammar({ text: "This is a sentence", mode: "report", rulesOnly: true });
-    assert.ok(ruleIds(r.issues).includes("missing_period"));
+  // TC-R004: Uncountable noun detection still works
+  it("TC-R004: uncountable noun 'informations' detected", async () => {
+    const r = await checkGrammar({ text: "We need the informations", mode: "report", rulesOnly: true });
+    const issue = r.issues.find((i) => i.rule === "uncountable_noun");
+    assert.ok(issue, "Should detect uncountable noun");
+    assert.equal(issue?.replacement, "information");
   });
 
   // TC-R005: Uncountable nouns still work
@@ -629,13 +630,14 @@ describe("Regression — Route Auth Integration", () => {
 // ============================================================================
 
 describe("Regression — Regex Safety", () => {
-  it("TC-R001b: regex engine handles text with many periods", async () => {
-    // Many periods trigger the space_before_period rule repeatedly
-    const text = "word . ".repeat(500);
+  it("TC-R001b: regex engine handles text with many contractions", async () => {
+    // Many contractions trigger the missing_apostrophe_contraction rule repeatedly
+    const text = "I dont know. you cant go. it wont work. ".repeat(200);
     const result = await timed(async () => {
       return checkGrammar({ text, mode: "report", rulesOnly: true });
     }, 3000);
     assert.ok(result.issues.length > 0);
+    assert.ok(ruleIds(result.issues).includes("missing_apostrophe_contraction"));
   });
 
   it("TC-R002b: regex engine handles repeated double spaces", async () => {
@@ -656,8 +658,8 @@ describe("Regression — Regex Safety", () => {
   it("handles single-word text", async () => {
     const r = await checkGrammar({ text: "Hello\n", mode: "report", rulesOnly: true });
     assert.ok(Array.isArray(r.issues));
-    // missing_period regex requires uppercase first letter: ^([A-Z][^.!?}\n"]+)$
-    assert.ok(ruleIds(r.issues).includes("missing_period"));
+    // single-word text no longer triggers missing_period (handled by LanguageTool)
+    // Just verify no crash
   });
 });
 
@@ -731,25 +733,15 @@ describe("Regression — Issue Shape Invariants", () => {
 
 describe("Regression — Individual Rule Spot Checks", () => {
   const testCases: Array<{ rule: string; input: string; originalSnippet?: string; replacementSnippet?: string }> = [
-    { rule: "space_before_comma", input: "Hello , world", originalSnippet: ",", replacementSnippet: "," },
-    { rule: "space_before_period", input: "End .", originalSnippet: ".", replacementSnippet: "." },
-    { rule: "space_before_semicolon", input: "X ; Y", originalSnippet: ";", replacementSnippet: ";" },
-    { rule: "space_before_colon", input: "Note : this", originalSnippet: ":", replacementSnippet: ":" },
-    { rule: "space_before_paren", input: "This (test )", originalSnippet: ")", replacementSnippet: ")" },
-    { rule: "double_space", input: "Hello  world", originalSnippet: "  ", replacementSnippet: " " },
-    { rule: "double_period", input: "Wait..", originalSnippet: "..", replacementSnippet: "..." },
-    { rule: "missing_period", input: "This is a sentence\n", originalSnippet: "sentence", replacementSnippet: "sentence." },
-    // Trailing-space line (Outlook contenteditable extraction): period must not be
-    // stranded after the space ("through ."), and the match must not straddle the newline.
-    { rule: "missing_period", input: "It has to be done through \nSeparate next line with enough length", originalSnippet: "It has to be done through", replacementSnippet: "It has to be done through." },
-    { rule: "capitalize_sentence_start", input: "hello world.", originalSnippet: "h", replacementSnippet: "H" },
-    { rule: "capitalize_after_period", input: "End. next.", originalSnippet: ". n", replacementSnippet: ". N" },
+    // Domain-specific rules that remain after LanguageTool migration
     { rule: "proper_noun_capitalization", input: "We use Prosepilot", originalSnippet: "Prosepilot", replacementSnippet: "ProsePilot" },
+    { rule: "missing_apostrophe_contraction", input: "I dont know", originalSnippet: "dont", replacementSnippet: "don't" },
+    { rule: "missing_apostrophe_contraction", input: "You cant go", originalSnippet: "cant", replacementSnippet: "can't" },
+    { rule: "missing_apostrophe_contraction", input: "It wont work", originalSnippet: "wont", replacementSnippet: "won't" },
     { rule: "uncountable_noun", input: "the informations", originalSnippet: "informations", replacementSnippet: "information" },
-    { rule: "gerund_to_noun", input: "our discussing", originalSnippet: "our discussing", replacementSnippet: "our discussion" },
-    { rule: "missing_object_pronoun", input: "They finished on time", originalSnippet: "finished on time", replacementSnippet: "finished it on time" },
+    { rule: "gerund_to_noun", input: "Per our discussing the budget", originalSnippet: "our discussing", replacementSnippet: "our discussion" },
     { rule: "adjective_noun_order", input: "upgrade premium", originalSnippet: "upgrade premium", replacementSnippet: "premium upgrade" },
-    { rule: "comma_after_conditional", input: "If we can fix this The problem", originalSnippet: "If we can fix this", replacementSnippet: "If we can fix this, The" },
+    { rule: "adjective_noun_order", input: "report inspection", originalSnippet: "report inspection", replacementSnippet: "inspection report" },
   ];
 
   for (const tc of testCases) {
@@ -781,11 +773,11 @@ describe("Regression — Individual Rule Spot Checks", () => {
 describe("Regression — Concurrent Check Safety", () => {
   it("multiple concurrent checks do not interfere", async () => {
     const texts = [
-      "hello world", // capitalize_sentence_start + missing_period (lowercase start)
+      "I dont know what to do", // missing_apostrophe_contraction
       "the informations are here", // uncountable_noun
-      "per our discussing the matter", // gerund_to_noun
+      "Per our discussing the matter", // gerund_to_noun
       "we need equipments for the upgrade premium", // uncountable_noun + adjective_noun_order
-      "This is important. next sentence", // missing_period + capitalize_after_period
+      "We use Prosepilot for writing", // proper_noun_capitalization
     ];
 
     const results = await Promise.all(
@@ -798,8 +790,8 @@ describe("Regression — Concurrent Check Safety", () => {
       assert.ok(Array.isArray(r.issues));
     }
 
-    // First text should have capitalize_sentence_start (lowercase 'h')
-    assert.ok(ruleIds(results[0].issues).includes("capitalize_sentence_start"));
+    // First text should have missing_apostrophe_contraction
+    assert.ok(ruleIds(results[0].issues).includes("missing_apostrophe_contraction"));
     // Second text should have uncountable_noun
     assert.ok(ruleIds(results[1].issues).includes("uncountable_noun"));
     // Third text should have gerund_to_noun
