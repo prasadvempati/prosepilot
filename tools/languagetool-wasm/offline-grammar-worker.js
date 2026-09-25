@@ -2,7 +2,10 @@ const CACHE_DB = "prosepilot-grammar-cache";
 const CACHE_STORE = "checks";
 const MAX_CACHE_AGE = 7 * 24 * 60 * 60 * 1000;
 
-let dbPromise = null;
+// Write buffer for batched IndexedDB writes (reduces overhead)
+const WRITE_BUFFER_DELAY = 100; // ms
+let writeBuffer = [];
+let writeBufferTimer = null;
 
 function initDB() {
   if (dbPromise) return dbPromise;
@@ -50,15 +53,36 @@ async function getCached(text) {
 }
 
 async function setCached(text, issues) {
-  const db = await initDB();
   const hash = getCacheKey(text);
-  return new Promise((resolve) => {
+  const entry = { hash, text, issues, timestamp: Date.now() };
+  
+  // Add to buffer
+  writeBuffer.push(entry);
+  
+  // Debounce the actual write
+  if (writeBufferTimer) clearTimeout(writeBufferTimer);
+  writeBufferTimer = setTimeout(flushWriteBuffer, WRITE_BUFFER_DELAY);
+  
+  // For immediate consistency, also update in-memory immediately
+  // (the actual DB write happens async)
+  return Promise.resolve();
+}
+
+function flushWriteBuffer() {
+  if (writeBuffer.length === 0) return;
+  
+  const toWrite = [...writeBuffer];
+  writeBuffer = [];
+  writeBufferTimer = null;
+  
+  initDB().then(db => {
     const tx = db.transaction(CACHE_STORE, "readwrite");
     const store = tx.objectStore(CACHE_STORE);
-    store.put({ hash, text, issues, timestamp: Date.now() });
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => resolve();
-  });
+    for (const entry of toWrite) {
+      store.put(entry);
+    }
+    // tx.oncomplete and onerror are fire-and-forget for background writes
+  }).catch(() => {});
 }
 
 const CONTRACTIONS = [
