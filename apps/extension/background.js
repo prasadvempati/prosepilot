@@ -53,10 +53,25 @@ async function handleSpellcheckLocal(words, sendResponse) {
   }
 }
 
+// --- Badge update utility ---
+function updateBadge(tabId, count) {
+  if (count > 0) {
+    chrome.action.setBadgeText({ text: count > 99 ? "99+" : String(count), tabId });
+    chrome.action.setBadgeBackgroundColor({ color: "#6366f1", tabId });
+  } else {
+    chrome.action.setBadgeText({ text: "", tabId });
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "prosepilot-check",
     title: "Check grammar with ProsePilot",
+    contexts: ["selection"],
+  });
+  chrome.contextMenus.create({
+    id: "prosepilot-ignore",
+    title: "Add \"%s\" to ignored words",
     contexts: ["selection"],
   });
 });
@@ -65,7 +80,27 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "prosepilot-check") {
     try { chrome.action.openPopup(); } catch(e) { /* Edge doesn't support openPopup */ }
   }
+  if (info.menuItemId === "prosepilot-ignore") {
+    const word = info.selectionText?.trim().toLowerCase();
+    if (word) {
+      chrome.storage.local.get("prosepilot_ignored_words", (data) => {
+        const words = data.prosepilot_ignored_words || [];
+        if (!words.includes(word)) {
+          words.push(word);
+          chrome.storage.local.set({ prosepilot_ignored_words: words });
+        }
+      });
+    }
+  }
 });
+
+// Track issue counts per tab for badge
+const tabIssueCounts = new Map();
+
+function updateTabBadge(tabId, count) {
+  tabIssueCounts.set(tabId, count);
+  updateBadge(tabId, count);
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "setClerkToken") {
@@ -338,6 +373,10 @@ async function handleCheckInline(text, sendResponse, lightweight = false) {
     }
     setTimeout(() => inlineCache.delete(cacheKey), 60000);
 
+    // Update badge for the sender's tab
+    if (sender.tab?.id) {
+      updateTabBadge(sender.tab.id, issues.length);
+    }
     sendResponse({ issues });
   } catch (err) {
     sendResponse({ issues: [] });
