@@ -1,13 +1,6 @@
-import { SignInButton, SignUpButton } from "@clerk/react";
-import { Pricing } from "./Pricing";
-import { useState } from "react";
+import { useState } from 'react';
 
-interface LandingPageProps {
-  isSignedIn: boolean;
-  onStartWriting: () => void;
-}
-
-export function LandingPage({ isSignedIn, onStartWriting }: LandingPageProps) {
+export default function LandingPage() {
   const [demoText, setDemoText] = useState(
     "your going to love this. its a great day. could of done better."
   );
@@ -37,11 +30,11 @@ export function LandingPage({ isSignedIn, onStartWriting }: LandingPageProps) {
   };
 
   return (
-    <div className="relative overflow-hidden">
-      {/* Hero */}
-      <section className="relative pt-20 pb-32 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600">
+    <div className="min-h-screen bg-gray-50">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 opacity-5" />
-        <div className="relative max-w-7xl mx-auto">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-32">
           <div className="text-center">
             <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 mb-8">
               <span className="text-white text-sm font-medium">New: Voice Preservation Score™</span>
@@ -57,34 +50,27 @@ export function LandingPage({ isSignedIn, onStartWriting }: LandingPageProps) {
               Grammarly rewrites; we refine.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-              {isSignedIn ? (
-                <button onClick={onStartWriting} className="bg-white text-indigo-600 font-semibold px-8 py-4 rounded-xl text-lg hover:bg-gray-100 transition-all shadow-lg">
-                  Start Writing
-                </button>
-              ) : (
-                <>
-                  <SignUpButton mode="modal">
-                    <button className="bg-white text-indigo-600 font-semibold px-8 py-4 rounded-xl text-lg hover:bg-gray-100 transition-all shadow-lg">
-                      Start writing free
-                    </button>
-                  </SignUpButton>
-                  <SignInButton mode="modal">
-                    <button className="bg-white/10 backdrop-blur-sm border border-white/20 text-white font-semibold px-8 py-4 rounded-xl text-lg hover:bg-white/20 transition-all">
-                      Sign in
-                    </button>
-                  </SignInButton>
-                </>
-              )}
+              <a
+                href="https://chrome.google.com/webstore/detail/prosepilot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white text-indigo-600 font-semibold px-8 py-4 rounded-xl text-lg hover:bg-gray-100 transition-all shadow-lg"
+              >
+                Add to Chrome — Free
+              </a>
+              <a
+                href="#demo"
+                className="bg-white/10 backdrop-blur-sm border border-white/20 text-white font-semibold px-8 py-4 rounded-xl text-lg hover:bg-white/20 transition-all"
+              >
+                Try Live Demo
+              </a>
             </div>
-
-            <div className="voice-score-demo" style={{maxWidth: '600px', margin: '0 auto'}}>
-              <div className="flex items-center justify-center gap-4 p-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl">
-                <div className="voice-badge" style={{width: '70px', height: '70px', fontSize: '24px'}}>94%</div>
-                <div className="text-left">
-                  <h4 className="text-white font-semibold">Your Voice Preserved</h4>
-                  <p className="text-white/80 text-sm">Grammarly would change ~40% of your style. We keep you sounding like you.</p>
-                </div>
-              </div>
+            
+            {/* Trust indicators */}
+            <div className="flex flex-wrap justify-center gap-8 text-white/70 text-sm">
+              <span>✓ Works on Gmail, LinkedIn, Docs, Notion, Slack</span>
+              <span>✓ Offline-first: your text stays private</span>
+              <span>✓ Voice Preservation Score on every check</span>
             </div>
           </div>
         </div>
@@ -134,6 +120,7 @@ export function LandingPage({ isSignedIn, onStartWriting }: LandingPageProps) {
               </div>
             </div>
 
+            {/* Results */}
             {issues.length > 0 && (
               <div className="mt-6 space-y-3">
                 <h3 className="text-lg font-semibold text-gray-900">
@@ -269,7 +256,109 @@ export function LandingPage({ isSignedIn, onStartWriting }: LandingPageProps) {
       </section>
 
       {/* Pricing */}
-      <Pricing isSignedIn={isSignedIn} onStartWriting={onStartWriting} />
+      <section className="py-20 sm:py-28 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              Simple, fair pricing
+            </h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Free for core grammar. Pro features for power users.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            {[
+              {
+                name: 'Free',
+                price: '$0',
+                period: '/month',
+                features: [
+                  'Core grammar & spelling',
+                  'Offline engine',
+                  'Voice Preservation Score',
+                  'Works on all sites',
+                  'Basic corrections',
+                ],
+                cta: 'Get Free',
+                popular: false,
+              },
+              {
+                name: 'Pro',
+                price: '$9',
+                period: '/month',
+                features: [
+                  'Everything in Free',
+                  'Advanced style suggestions',
+                  'Tone adjustment (formal, casual, etc.)',
+                  'Rewrite with custom instructions',
+                  'Vocabulary enhancement',
+                  'Priority support',
+                ],
+                cta: 'Start Pro Trial',
+                popular: true,
+              },
+              {
+                name: 'Team',
+                price: '$14',
+                period: '/user/month',
+                features: [
+                  'Everything in Pro',
+                  'Team style guides',
+                  'Shared vocabulary',
+                  'Admin dashboard',
+                  'Usage analytics',
+                  'SSO & SCIM (Enterprise)',
+                ],
+                cta: 'Contact Sales',
+                popular: false,
+              },
+            ].map((plan) => (
+              <div
+                key={plan.name}
+                className={`relative bg-white rounded-2xl border-2 p-8 ${
+                  plan.popular
+                    ? 'border-indigo-500 shadow-xl ring-4 ring-indigo-500/20'
+                    : 'border-gray-200'
+                }`}
+              >
+                {plan.popular && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-semibold px-3 py-1 rounded-full">
+                    Most Popular
+                  </div>
+                )}
+                <h3 className="text-xl font-bold text-gray-900 mb-1">{plan.name}</h3>
+                <div className="flex items-baseline gap-1 mb-6">
+                  <span className="text-4xl font-bold text-gray-900">{plan.price}</span>
+                  <span className="text-gray-500">{plan.period}</span>
+                </div>
+                <ul className="space-y-3 mb-8">
+                  {plan.features.map((feat, i) => (
+                    <li key={i} className="flex items-center gap-2 text-gray-600">
+                      <svg className="w-5 h-5 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      {feat}
+                    </li>
+                  ))}
+                </ul>
+                <a
+                  href={plan.name === 'Free' ? 'https://chrome.google.com/webstore/detail/prosepilot' : '#'}
+                  target={plan.name === 'Free' ? '_blank' : undefined}
+                  rel={plan.name === 'Free' ? 'noopener noreferrer' : undefined}
+                  className={`w-full py-3 px-6 rounded-xl font-semibold text-center transition-all ${
+                    plan.popular
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                  }`}
+                >
+                  {plan.cta}
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Footer CTA */}
       <section className="py-20 bg-indigo-600">
@@ -280,12 +369,14 @@ export function LandingPage({ isSignedIn, onStartWriting }: LandingPageProps) {
           <p className="text-lg text-indigo-100 mb-8">
             Join thousands of writers who refuse to sound like a robot.
           </p>
-          <button
-            onClick={onStartWriting}
+          <a
+            href="https://chrome.google.com/webstore/detail/prosepilot"
+            target="_blank"
+            rel="noopener noreferrer"
             className="bg-white text-indigo-600 font-semibold px-10 py-4 rounded-xl text-lg hover:bg-gray-100 transition-all shadow-xl inline-block"
           >
-            {isSignedIn ? 'Start Writing' : 'Add ProsePilot to Chrome — Free'}
-          </button>
+            Add ProsePilot to Chrome — Free
+          </a>
         </div>
       </section>
 
