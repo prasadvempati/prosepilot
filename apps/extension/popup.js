@@ -221,6 +221,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       const data = await res.json();
       loading.style.display = "none";
 
+      // Display Voice Preservation Score
+      if (data.voicePreservation) {
+        renderVoicePreservation(data.voicePreservation);
+      }
+
       if (data.issues && data.issues.length > 0) {
         currentIssues = data.issues.map((issue, i) => ({ ...issue, id: i, status: "pending" }));
         status.textContent = `Found ${data.issues.length} issue(s) — accept or reject each`;
@@ -232,6 +237,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         status.className = "status ready";
         results.innerHTML = '<div class="issue" style="background:#ecfdf5;color:#065f46;">Your text looks good!</div>';
         results.style.display = "block";
+        
+        // Still show voice score for clean text (it's 100%)
+        if (data.voicePreservation) {
+          renderVoicePreservation(data.voicePreservation);
+        }
       }
     } catch (err) {
       loading.style.display = "none";
@@ -481,4 +491,47 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text == null ? "" : String(text);
   return div.innerHTML;
+}
+
+function renderVoicePreservation(vp) {
+  const section = document.getElementById("voiceScoreSection");
+  const badge = document.getElementById("voiceScoreBadge");
+  const label = document.getElementById("voiceScoreLabel");
+  const factors = document.getElementById("voiceScoreFactors");
+  
+  if (!section || !badge || !label || !factors) return;
+  
+  const score = Math.round(vp.score * 100);
+  const grammarlyScore = Math.max(0, Math.round(100 - (vp.factors.contractionChanges * 5 + vp.factors.passiveToActive * 8 + vp.factors.sentenceRestructuring * 6 + vp.factors.formalityShifts * 5 + vp.factors.vocabularySubstitutions * 3)));
+  
+  section.style.display = "block";
+  badge.textContent = score;
+  
+  // Color gradient based on score
+  if (score >= 90) {
+    badge.style.background = "linear-gradient(135deg,#059669 0%,#10b981 100%)";
+  } else if (score >= 75) {
+    badge.style.background = "linear-gradient(135deg,#d97706 0%,#f59e0b 100%)";
+  } else {
+    badge.style.background = "linear-gradient(135deg,#dc2626 0%,#ef4444 100%)";
+  }
+  
+  label.textContent = `Grammarly would change ~${100 - grammarlyScore}% of your voice`;
+  
+  // Factor breakdown
+  const factorData = [
+    { key: "contractionChanges", label: "Contractions", color: "#8b5cf6" },
+    { key: "passiveToActive", label: "Passive→Active", color: "#f97316" },
+    { key: "sentenceRestructuring", label: "Restructuring", color: "#ec4899" },
+    { key: "formalityShifts", label: "Formality", color: "#6366f1" },
+    { key: "vocabularySubstitutions", label: "Vocab", color: "#14b8a6" },
+  ];
+  
+  factors.innerHTML = factorData
+    .filter(f => vp.factors[f.key] > 0)
+    .map(f => `
+      <span style="background:${f.color}22;border:1px solid ${f.color}55;color:${f.color};padding:2px 8px;border-radius:999px;display:flex;align-items:center;gap:4px;">
+        ${f.label}: ${vp.factors[f.key]}
+      </span>
+    `).join("") || '<span style="color:#6b7280;font-size:10px;">No voice-altering changes</span>';
 }

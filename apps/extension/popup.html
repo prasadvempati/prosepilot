@@ -62,6 +62,20 @@
     </div>
     <div id="status" class="status ready">Ready to check</div>
     
+    <!-- Voice Preservation Score -->
+    <div id="voiceScoreSection" style="display:none;margin-bottom:12px;padding:12px;background:linear-gradient(135deg,#f0fdf4 0%,#ecfdf5 100%);border:1px solid #bbf7d0;border-radius:8px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div id="voiceScoreBadge" style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#059669 0%,#10b981 100%);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:16px;">94</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:600;color:#065f46;">Your Voice Preserved</div>
+          <div id="voiceScoreLabel" style="font-size:11px;color:#166534;">Grammarly would change ~40% of your voice</div>
+        </div>
+      </div>
+      <div id="voiceScoreFactors" style="display:flex;gap:6px;flex-wrap:wrap;font-size:10px;">
+        <!-- Factors will be inserted here -->
+      </div>
+    </div>
+    
     <div id="modeSection" style="margin-bottom:12px;">
       <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Grammar Mode</div>
       <div style="display:flex;gap:4px;">

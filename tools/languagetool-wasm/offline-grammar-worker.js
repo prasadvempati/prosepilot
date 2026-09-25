@@ -129,6 +129,24 @@ const GERUND_TO_NOUN = [
   { pattern: /\bper our discussing\b/gi, replacement: "Per our discussion" },
 ];
 
+// === Common confusion patterns (your/you're, their/there/they're, etc.) ===
+const CONFUSION_PATTERNS = [
+  { pattern: /\byour\s+(going|here|there|welcome|right|sure)\b/gi, replacement: "you're $1", category: "grammar", rule: "confused_your_youre", explanation: "Use 'you're' (you are), not 'your' (possessive)." },
+  { pattern: /\btheir\s+(going|here|there)\b/gi, replacement: "they're $1", category: "grammar", rule: "confused_their_theyre", explanation: "Use 'they're' (they are), not 'their' (possessive)." },
+  { pattern: /\bthere\s+(is|are|was|were|goes|come)\b/gi, replacement: "they're $1", category: "grammar", rule: "confused_there_theyre", explanation: "Likely 'they're' (they are), not 'there' (location)." },
+  { pattern: /\bits\s+(a|an|the|going|time|been|good|bad|hard|easy|important|possible|likely|unlikely)\b/gi, replacement: "it's $1", category: "grammar", rule: "confused_its_its", explanation: "Use 'it's' (it is), not 'its' (possessive)." },
+  { pattern: /\bwho's\s+(car|house|book|phone|idea|fault|turn|responsibility)\b/gi, replacement: "whose $1", category: "grammar", rule: "confused_whos_whose", explanation: "Use 'whose' (possessive), not 'who's' (who is)." },
+  { pattern: /\bthen\s+(is|are|was|were|has|have|had|does|did|can|could|will|would|should|may|might|must)\b/gi, replacement: "than $1", category: "grammar", rule: "confused_then_than", explanation: "Use 'than' for comparisons, not 'then' (time)." },
+  { pattern: /\b(?:more|less|better|worse|greater|fewer|older|younger|faster|slower)\s+then\b/gi, replacement: (m) => m.replace(/\bthen\b/gi, "than"), category: "grammar", rule: "confused_then_than", explanation: "Use 'than' for comparisons, not 'then' (time)." },
+  { pattern: /\b(could|should|would|must|might)\s+of\b/gi, replacement: (m) => m.replace(/\bof\b/gi, "have"), category: "grammar", rule: "confused_could_of", explanation: "Use 'have', not 'of' (e.g., 'could have', not 'could of')." },
+];
+
+// === Missing auxiliary verbs (passive constructions) ===
+const AUXILIARY_PATTERNS = [
+  { pattern: /\b(?:work\s+orders?|the\s+unit|maintenance|repairs?)\s+(completed|finished|done|resolved|addressed)\b/gi, replacement: (m) => m.replace(/\b(completed|finished|done|resolved|addressed)\b/gi, "were $1"), category: "grammar", rule: "missing_auxiliary_passive", explanation: "Passive construction needs 'were' (e.g., 'were completed')." },
+  { pattern: /\b(?:the\s+unit|it|this|that)\s+(delayed|postponed|cancelled|scheduled)\b/gi, replacement: (m) => m.replace(/\b(delayed|postponed|cancelled|scheduled)\b/gi, "was $1"), category: "grammar", rule: "missing_auxiliary_passive", explanation: "Passive construction needs 'was' (e.g., 'was delayed')." },
+];
+
 function applyContractionCase(matched, canonical) {
   if (matched === matched.toUpperCase()) return canonical.toUpperCase();
   if (matched[0] === matched[0]?.toUpperCase()) return canonical[0].toUpperCase() + canonical.slice(1);
@@ -324,6 +342,173 @@ function checkCapitalization(text) {
   return issues;
 }
 
+// === Common confusion patterns (your/you're, their/there/they're, etc.) ===
+function checkConfusionPatterns(text) {
+  const issues = [];
+  for (const { pattern, replacement, category, rule, explanation } of CONFUSION_PATTERNS) {
+    let match;
+    pattern.lastIndex = 0;
+    while ((match = pattern.exec(text)) !== null) {
+      let fixed;
+      if (typeof replacement === "function") {
+        fixed = match[0].replace(pattern, replacement);
+      } else {
+        fixed = match[0].replace(pattern, replacement);
+      }
+      
+      if (fixed && fixed !== match[0]) {
+        issues.push({
+          id: `confusion_${Math.random().toString(36).slice(2, 10)}`,
+          category,
+          rule,
+          startUtf16: match.index,
+          endUtf16: match.index + match[0].length,
+          original: match[0],
+          replacement: fixed,
+          confidence: 0.95,
+          safeAuto: true,
+          severity: "info",
+          explanation,
+          sourceHash: getCacheKey(text),
+          source: "offline-grammar",
+        });
+      }
+    }
+  }
+  return issues;
+}
+
+// === Missing auxiliary verbs (passive constructions) ===
+function checkMissingAuxiliaries(text) {
+  const issues = [];
+  for (const { pattern, replacement, category, rule, explanation } of AUXILIARY_PATTERNS) {
+    let match;
+    pattern.lastIndex = 0;
+    while ((match = pattern.exec(text)) !== null) {
+      const fixed = match[0].replace(pattern, replacement);
+      if (fixed && fixed !== match[0]) {
+        issues.push({
+          id: `aux_${Math.random().toString(36).slice(2, 10)}`,
+          category,
+          rule,
+          startUtf16: match.index,
+          endUtf16: match.index + match[0].length,
+          original: match[0],
+          replacement: fixed,
+          confidence: 0.85,
+          safeAuto: false,
+          severity: "warning",
+          explanation,
+          sourceHash: getCacheKey(text),
+          source: "offline-grammar",
+        });
+      }
+    }
+  }
+  return issues;
+}
+
+// === Run-on sentences / comma splices ===
+function checkRunOnSentences(text) {
+  const issues = [];
+  const regex = /\b([A-Z][^.!?]*\b(?:I|we|you|he|she|it|they|the\s+\w+|a\s+\w+)\s+\w+[^.!?]*),\s+(I|we|you|he|she|it|they|the\s+\w+|a\s+\w+)\s+\w+[^.!?]*([.!?])/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const afterComma = text.substring(match.index + match[0].indexOf(',') + 1, match.index + match[0].indexOf(',') + 20);
+    if (!/^\s*(and|but|or|so|yet|for|nor)\b/i.test(afterComma)) {
+      issues.push({
+        id: `runon_${Math.random().toString(36).slice(2, 10)}`,
+        category: "punctuation",
+        rule: "comma_splice",
+        startUtf16: match.index,
+        endUtf16: match.index + match[0].length,
+        original: match[0].trim(),
+        replacement: match[0].replace(/,(\s+)(I|we|you|he|she|it|they|the\s+\w+|a\s+\w+)/, '; $1$2'),
+        confidence: 0.75,
+        safeAuto: false,
+        severity: "warning",
+        explanation: "Possible comma splice — use semicolon or add conjunction.",
+        sourceHash: getCacheKey(text),
+        source: "offline-grammar",
+      });
+    }
+  }
+  return issues;
+}
+
+// === Parallel structure ===
+function checkParallelStructure(text) {
+  const issues = [];
+  const regex = /\b(to\s+\w+|ing\s+\w+|\w+\s+ing)\s+and\s+(to\s+\w+|\w+)\b/gi;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const parts = match[0].split(/\s+and\s+/);
+    if (parts.length === 2) {
+      const first = parts[0].trim();
+      const second = parts[1].trim();
+      const firstIsInfinitive = /^to\s+\w+$/.test(first);
+      const firstIsGerund = /\w+ing$/.test(first);
+      const secondIsInfinitive = /^to\s+\w+$/.test(second);
+      const secondIsGerund = /\w+ing$/.test(second);
+      
+      if ((firstIsInfinitive && !secondIsInfinitive) || (firstIsGerund && !secondIsGerund)) {
+        issues.push({
+          id: `parallel_${Math.random().toString(36).slice(2, 10)}`,
+          category: "style",
+          rule: "parallel_structure",
+          startUtf16: match.index,
+          endUtf16: match.index + match[0].length,
+          original: match[0],
+          replacement: firstIsInfinitive ? `to ${first.replace('to ', '')} and to ${second}` : `${first.replace(/ing$/, 'ing')} and ${second.replace(/ing$/, 'ing')}`,
+          confidence: 0.7,
+          safeAuto: false,
+          severity: "info",
+          explanation: "Parallel structure: use matching forms (both 'to X' or both '-ing').",
+          sourceHash: getCacheKey(text),
+          source: "offline-grammar",
+        });
+      }
+    }
+  }
+  return issues;
+}
+
+// === Subject-verb agreement for complex subjects ===
+function checkSubjectVerbAgreement(text) {
+  const issues = [];
+  const patterns = [
+    { pattern: /\b(each|every|either|neither)\s+of\s+the\s+\w+\s+(are|were|have|has|do|does)\b/gi, replacement: (m) => m.replace(/\b(are|were)\b/gi, "is").replace(/\b(have)\b/gi, "has").replace(/\b(do)\b/gi, "does"), explanation: "'Each/every/either/neither of the X' takes singular verb." },
+    { pattern: /\b(?:the\s+number\s+of)\s+\w+\s+(are|were|have)\b/gi, replacement: (m) => m.replace(/\b(are|were)\b/gi, "is").replace(/\b(have)\b/gi, "has"), explanation: "'The number of' takes singular verb." },
+    { pattern: /\b(?:a\s+number\s+of)\s+\w+\s+(is|was|has)\b/gi, replacement: (m) => m.replace(/\b(is|was)\b/gi, "are").replace(/\b(has)\b/gi, "have"), explanation: "'A number of' takes plural verb." },
+  ];
+  
+  for (const { pattern, replacement, explanation } of patterns) {
+    let match;
+    pattern.lastIndex = 0;
+    while ((match = pattern.exec(text)) !== null) {
+      const fixed = match[0].replace(pattern, replacement);
+      if (fixed && fixed !== match[0]) {
+        issues.push({
+          id: `sv_${Math.random().toString(36).slice(2, 10)}`,
+          category: "grammar",
+          rule: "subject_verb_agreement_complex",
+          startUtf16: match.index,
+          endUtf16: match.index + match[0].length,
+          original: match[0],
+          replacement: fixed,
+          confidence: 0.9,
+          safeAuto: true,
+          severity: "info",
+          explanation,
+          sourceHash: getCacheKey(text),
+          source: "offline-grammar",
+        });
+      }
+    }
+  }
+  return issues;
+}
+
 function checkRepeatedWords(text) {
   const issues = [];
   const regex = /\b(the|a|an|is|are|was|were|have|has|had|do|does|did|can|could|will|would|shall|should|may|might|must)\s+\1\b/gi;
@@ -362,6 +547,12 @@ async function checkGrammar(text) {
     ...checkGerundToNoun(text),
     ...checkCapitalization(text),
     ...checkRepeatedWords(text),
+    // NEW checks
+    ...checkConfusionPatterns(text),
+    ...checkMissingAuxiliaries(text),
+    ...checkRunOnSentences(text),
+    ...checkParallelStructure(text),
+    ...checkSubjectVerbAgreement(text),
   ];
   
   await setCached(text, allIssues);
