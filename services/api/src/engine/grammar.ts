@@ -667,6 +667,66 @@ SPECIFIC PATTERNS TO CHECK:
 - ELICIT VS ILLICIT: "elicit" = draw out, "illicit" = illegal — "elicit a response" (correct); "an elicit affair"→"an illicit affair".
 - ENSURE VS INSURE: "ensure" = make certain, "insure" = provide insurance — "insure compliance"→"ensure compliance".
 
+- THEN VS THAN: "then" = time/sequence, "than" = comparison — "better then expected"→"better than expected"; "first than"→"first then".
+
+- MAY VS MIGHT: "may" = permission/possibility (higher probability), "might" = lower probability/hypothetical — "It might rain" (uncertain), "You may leave" (permission).
+
+- IF VS WHETHER: "whether" for yes/no alternatives, "if" for conditionals — "I wonder if/whether he will come" (both OK for indirect question); "If it rains, I'll stay" (conditional, not "whether").
+
+- SINCE VS BECAUSE: "since" = temporal (time), "because" = causal — "Since he arrived, we've worked" (time); "Because he arrived, we can start" (cause).
+
+- WHILE VS WHEREAS: "while" = temporal (simultaneous), "whereas" = contrast — "While I cooked, she read" (time); "He likes tea, whereas she prefers coffee" (contrast).
+
+- EACH OTHER VS ONE ANOTHER: "each other" = two, "one another" = three+ — "The two partners trust each other"; "The team members support one another".
+
+- EVERY DAY VS EVERYDAY: "every day" = adverb (each day), "everyday" = adjective (ordinary) — "I go every day"; "everyday tasks".
+
+- ANY ONE VS ANYONE: "any one" = any single item/person, "anyone" = any person — "Any one of these works"; "Anyone can join".
+
+- EVERY ONE VS EVERYONE: "every one" = each individual, "everyone" = all people — "Every one of them agreed"; "Everyone attended".
+
+- INTO VS IN TO: "into" = motion/transformation, "in to" = adverb + preposition — "Walk into the room"; "Hand in to the teacher".
+
+- ONTO VS ON TO: "onto" = motion to surface, "on to" = adverb + preposition — "Step onto the platform"; "Move on to the next task".
+
+- A WHILE VS AWHILE: "a while" = noun phrase (for a while), "awhile" = adverb (for a while) — "Wait a while"; "Wait awhile".
+
+- ALL RIGHT VS ALRIGHT: "all right" = standard, "alright" = informal — "It's all right"; avoid "alright" in formal writing.
+
+- BACKUP VS BACK UP: "backup" = noun/adjective, "back up" = verb — "Make a backup"; "Back up your files".
+
+- LOGIN VS LOG IN: "login" = noun/adjective, "log in" = verb — "The login page"; "Log in to your account".
+
+- SETUP VS SET UP: "setup" = noun, "set up" = verb — "The setup is complete"; "Set up the equipment".
+
+- MAKEUP VS MAKE UP: "makeup" = noun, "make up" = verb — "Apply makeup"; "Make up the difference".
+
+- WORKOUT VS WORK OUT: "workout" = noun, "work out" = verb — "Morning workout"; "Work out the problem".
+
+- FOLLOWUP VS FOLLOW UP: "follow-up" = noun/adjective, "follow up" = verb — "Schedule a follow-up"; "Follow up on the email".
+
+- ELLIPSIS: three dots with spaces for omission — "word ... word" not "word...word"; no ellipsis at sentence start/end.
+
+- EM DASH VS EN DASH VS HYPHEN: em dash (—) for breaks/insertions, en dash (–) for ranges, hyphen (-) for compounds — "2023–2024" (en dash); "well-known" (hyphen); "He said—then stopped" (em dash).
+
+- SEMICOLON IN COMPLEX LISTS: use semicolons when list items contain commas — "Boston, MA; Chicago, IL; Seattle, WA".
+
+- COLON AFTER COMPLETE SENTENCE: colon must follow an independent clause — "The rule: no late work" (correct); "The rule is: no late work" (incorrect).
+
+- PARENTHESES: for supplementary info; period outside if not a full sentence — "He arrived (late)"; "(He arrived late.)".
+
+- QUOTATION MARKS: use smart quotes (\u201C \u201D) in final output; straight quotes (" ") for code — "She said, 'Hello'"; const x = "value" (straight quotes in code).
+
+- NUMBERS ONE TO NINE SPELLED OUT: spell out one through nine, use numerals for 10+ — "three items, 12 items".
+
+- CONSISTENT ABBREVIATIONS: define acronym on first use — "The National Association of Realtors (NAR)".
+
+- DANGLING PREPOSITIONS: avoid ending sentences with prepositions in formal writing — "To whom did you give it?" not "Who did you give it to?".
+
+- SPLIT INFINITIVES: acceptable in modern English; only flag if awkward — "to boldly go" (fine); "to completely and utterly fail" (consider "to fail completely").
+
+- OXFORD COMMA IN SERIES: always use serial comma for 3+ items — "red, white, and blue" not "red, white and blue".
+
 Be AGGRESSIVE about finding issues. Even small improvements count. Return issues for EVERY mistake you find, no matter how minor.
 
 Only return issues you are confident about. Return an empty array if the text is clean.
